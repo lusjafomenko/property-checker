@@ -16,6 +16,10 @@
  */
 package edu.kit.iti.checker.property.subchecker.lattice;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,6 +34,11 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
 
+import com.sun.tools.javac.tree.JCTree;
+import edu.kit.iti.checker.property.lattice.PropertyAnnotation;
+import edu.kit.iti.checker.property.printer.PrettyPrinter;
+import edu.kit.iti.checker.property.printer.SMTPrinter;
+import edu.kit.iti.checker.property.util.FileUtils;
 import org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey;
 import org.checkerframework.checker.initialization.InitializationVisitor;
 import org.checkerframework.common.basetype.BaseTypeChecker;
@@ -41,6 +50,7 @@ import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.util.AnnotatedTypes;
 import org.checkerframework.javacutil.Pair;
 import org.checkerframework.javacutil.TreeUtils;
+import org.checkerframework.common.value.ValueChecker;
 
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BlockTree;
@@ -260,7 +270,53 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                     success = epa.checkProperty(null);
                 }
             }
+        } else {
+            // if annotation's parameter not literals print annotations out (replaced parameters)
+            PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
+            if (pa != null) {
+                    List<PropertyAnnotationType.Parameter> parL = pa.getAnnotationType().getParameters();
+                    List<String> acPar = pa.getActualParameters();
+                    if(!parL.isEmpty()) {
+                        String prop = pa.getAnnotationType().getProperty();
+                        String wfCond = pa.getAnnotationType().getWFCondition();
+                        System.out.println(pa.getName() + " " + pa.getAnnotationType().getProperty());
+                        System.out.println(pa.getAnnotationType().getWFCondition());
+                        for (int i = 0; i < parL.size(); i++) {
+                            String old = "§" + parL.get(i).getName() + "§";
+                            String act = acPar.get(i);
+                            prop = prop.replace(old, act);
+                            wfCond = wfCond.replace(old, act);
+                        }
+                        System.out.println(prop);
+                        System.out.println(wfCond);
+                        System.out.println(acPar);
+                        System.out.println(valueType.toString());
+                        System.out.println(getCurrentPath().toString());
+
+                        //bad usage SMTPrinter from here
+
+                    //    File fileS = new File("/home/fomenko/uni/ba_prc/testSMT.smt");
+                    //    //FileUtils.createFile(fileS);
+                    //    try (BufferedWriter outS = new BufferedWriter(new FileWriter(fileS))) {
+                    //        SMTPrinter printerS = new SMTPrinter(outS, true);
+                    //        printerS.printUnit((JCTree.JCCompilationUnit) getCurrentPath().getCompilationUnit(), null);
+                    //        //printerS.printUnit((JCTree.JCCompilationUnit) getCurrentPath().getLeaf(), null);
+                    //    }  catch (IOException e) {
+                    //        e.printStackTrace();
+                    //        System.exit(1);
+                    //    }
+
+                    }
+            }
         }
+
+        //no clue how to use constant value checker
+
+//        ValueChecker valChecker = new ValueChecker();
+//        PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
+//        pa.getActualParameters();
+//        valChecker.createSourceVisitorPublic().visitVariable()//validateTypeOf(valueTree);
+
 
         commonAssignmentCheckEndDiagnostic(success, null, varType, valueType, valueTree);
 

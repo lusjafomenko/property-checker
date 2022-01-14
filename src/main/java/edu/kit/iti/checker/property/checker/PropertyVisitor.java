@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.List;
 
+import edu.kit.iti.checker.property.printer.SMTPrinter;
 import org.checkerframework.common.basetype.BaseTypeChecker;
 import org.checkerframework.common.basetype.BaseTypeVisitor;
 
@@ -51,8 +52,20 @@ public class PropertyVisitor extends BaseTypeVisitor<PropertyAnnotatedTypeFactor
         super.visit(path);
 
         File file = Paths.get(getPropertyChecker().getOutputDir(), getRelativeSourceFileName()).toFile();
+        File fileS = Paths.get(getPropertyChecker().getOutputDir(), "test.smt").toFile();
         file.getParentFile().mkdirs();
+        fileS.getParentFile().mkdirs();
         FileUtils.createFile(file);
+        FileUtils.createFile(fileS);
+
+        //test usage of SMTPrinter. Must not be here!
+        try (BufferedWriter outS = new BufferedWriter(new FileWriter(fileS))) {
+            SMTPrinter printerS = new SMTPrinter(outS, true);
+            printerS.printUnit((JCCompilationUnit) path.getCompilationUnit(), null);
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
 
         try (BufferedWriter out = new BufferedWriter(new FileWriter(file))) {
         	List<Result> results = getPropertyChecker().getResults(getAbsoluteSourceFileName());
