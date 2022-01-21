@@ -16,29 +16,26 @@
  */
 package edu.kit.iti.checker.property.subchecker.lattice;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.Name;
-
+import com.sun.source.tree.*;
+import com.sun.source.tree.Tree.Kind;
+import com.sun.source.util.TreePath;
+import com.sun.tools.javac.parser.JavacParser;
+import com.sun.tools.javac.parser.ParserFactory;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCClassDecl;
+import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
+import com.sun.tools.javac.util.Context;
+import edu.kit.iti.checker.property.checker.PropertyChecker;
+import edu.kit.iti.checker.property.lattice.EvaluatedPropertyAnnotation;
+import edu.kit.iti.checker.property.lattice.Lattice;
 import edu.kit.iti.checker.property.lattice.PropertyAnnotation;
-import edu.kit.iti.checker.property.printer.PrettyPrinter;
+import edu.kit.iti.checker.property.lattice.PropertyAnnotationType;
+import edu.kit.iti.checker.property.lattice.parser.ParseException;
 import edu.kit.iti.checker.property.printer.SMTPrinter;
+import edu.kit.iti.checker.property.util.ClassUtils;
+import edu.kit.iti.checker.property.util.CollectionUtils;
 import edu.kit.iti.checker.property.util.FileUtils;
+import edu.kit.iti.checker.property.util.Union;
 import org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey;
 import org.checkerframework.checker.initialization.InitializationVisitor;
 import org.checkerframework.common.basetype.BaseTypeChecker;
@@ -50,32 +47,15 @@ import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.util.AnnotatedTypes;
 import org.checkerframework.javacutil.Pair;
 import org.checkerframework.javacutil.TreeUtils;
-import org.checkerframework.common.value.ValueChecker;
 
-import com.sun.source.tree.AssignmentTree;
-import com.sun.source.tree.BlockTree;
-import com.sun.source.tree.ClassTree;
-import com.sun.source.tree.ExpressionTree;
-import com.sun.source.tree.LiteralTree;
-import com.sun.source.tree.MethodInvocationTree;
-import com.sun.source.tree.MethodTree;
-import com.sun.source.tree.NewClassTree;
-import com.sun.source.tree.ReturnTree;
-import com.sun.source.tree.StatementTree;
-import com.sun.source.tree.Tree;
-import com.sun.source.tree.Tree.Kind;
-import com.sun.source.tree.VariableTree;
-import com.sun.source.util.TreePath;
-import com.sun.tools.javac.tree.JCTree.JCClassDecl;
-import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
-
-import edu.kit.iti.checker.property.checker.PropertyChecker;
-import edu.kit.iti.checker.property.lattice.EvaluatedPropertyAnnotation;
-import edu.kit.iti.checker.property.lattice.Lattice;
-import edu.kit.iti.checker.property.lattice.PropertyAnnotationType;
-import edu.kit.iti.checker.property.util.ClassUtils;
-import edu.kit.iti.checker.property.util.CollectionUtils;
-import edu.kit.iti.checker.property.util.Union;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.Name;
+import java.io.*;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFactory, LatticeValue, LatticeStore> {
 
@@ -270,59 +250,96 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                     success = epa.checkProperty(null);
                 }
             }
-        } else {
+        } else if (!success && !(valueTree instanceof LiteralTree)) {
             // if annotation's parameter not literals print annotations out (replaced parameters)
             PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
             if (pa != null) {
-                    List<PropertyAnnotationType.Parameter> parL = pa.getAnnotationType().getParameters();
-                    List<String> acPar = pa.getActualParameters();
-                    if(!parL.isEmpty()) {
-                        String prop = pa.getAnnotationType().getProperty();
-                        String wfCond = pa.getAnnotationType().getWFCondition();
-                        System.out.println(pa.getName() + " " + pa.getAnnotationType().getProperty());
-                        System.out.println(pa.getAnnotationType().getWFCondition());
-                        for (int i = 0; i < parL.size(); i++) {
-                            String old = "§" + parL.get(i).getName() + "§";
-                            String act = acPar.get(i);
-                            prop = prop.replace(old, act);
-                            wfCond = wfCond.replace(old, act);
-                        }
+                List<PropertyAnnotationType.Parameter> parL = pa.getAnnotationType().getParameters();
+                List<String> acPar = pa.getActualParameters();
+                PropertyChecker checker = getLatticeSubchecker().getParentChecker();
+    // create .smt file for the class
+                String smtName = getEnclClassName().toString() + ".smt";
+                File file = Paths.get(getLatticeSubchecker().getParentChecker().getOutputDir(), smtName).toFile();
+                file.getParentFile().mkdirs();
+                FileUtils.createFile(file);
+    // replace parameters in annotation
+                if(!parL.isEmpty()) {
+                    String prop = pa.getAnnotationType().getProperty();
+                    String wfCond = pa.getAnnotationType().getWFCondition();
+                    for (int i = 0; i < parL.size(); i++) {
+                        String old = "§" + parL.get(i).getName() + "§";
+                        String act = acPar.get(i);
+                        prop = prop.replace(old, act);
+                        wfCond = wfCond.replace(old, act);
+                    }
+
+    // print class in .smt file
+                    try (BufferedWriter outS = new BufferedWriter(new FileWriter(file))) {
+                        SMTPrinter printerS = new SMTPrinter(outS, true, pa, checker);
+                        printerS.printUnit((JCTree.JCCompilationUnit) getCurrentPath().getCompilationUnit(), null);
+                            //    if(propTree != null) {
+                            //        printerS.printBExpr((JCTree.JCBinary) propTree);
+                            //    }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        System.exit(1);
+                    }
+
+    // start SMT-Solver from commandline
+                    Runtime runtime = Runtime.getRuntime();
+                    try {
+                        Process process = runtime.exec(new String[]{"z3", smtName}, null, new File(getLatticeSubchecker().getParentChecker().getOutputDir()));
+                        String line;
+                        InputStream os = process.getInputStream();
+                        BufferedReader brCleanUp =
+                                        new BufferedReader (new InputStreamReader (os));
+
+                        line = brCleanUp.readLine ();
+                        System.out.println ("[Stdout] " + line);
+                        if (line.equals("sat")) success = true;
+                        brCleanUp.close();
+//                                runtime.exit(0);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+
+
                         System.out.println(prop);
                         System.out.println(wfCond);
                         System.out.println(acPar);
                         System.out.println(valueType.toString());
-                        System.out.println(getCurrentPath().toString());
-
-                        //bad usage SMTPrinter from here
-
-                    //    File fileS = new File("/home/fomenko/uni/ba_prc/testSMT.smt");
-                    //    //FileUtils.createFile(fileS);
-                    //    try (BufferedWriter outS = new BufferedWriter(new FileWriter(fileS))) {
-                    //        SMTPrinter printerS = new SMTPrinter(outS, true);
-                    //        printerS.printUnit((JCTree.JCCompilationUnit) getCurrentPath().getCompilationUnit(), null);
-                    //        //printerS.printUnit((JCTree.JCCompilationUnit) getCurrentPath().getLeaf(), null);
-                    //    }  catch (IOException e) {
-                    //        e.printStackTrace();
-                    //        System.exit(1);
-                    //    }
-
-                    }
+                }
             }
         }
-
-        //no clue how to use constant value checker
-
-//        ValueChecker valChecker = new ValueChecker();
-//        PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
-//        pa.getActualParameters();
-//        valChecker.createSourceVisitorPublic().visitVariable()//validateTypeOf(valueTree);
-
 
         commonAssignmentCheckEndDiagnostic(success, null, varType, valueType, valueTree);
 
         if (!success) {
             super.commonAssignmentCheck(varType, valueType, valueTree, errorKey, extraArgs);
         }
+    }
+
+    // not used; we need to parse annotations to jctrees, but not yet
+    public static JCTree.JCExpression parseString(String guardedByString, Context context) throws ParseException {
+        JavacParser parser =
+                ParserFactory.instance(context)
+                        .newParser(
+                                guardedByString,
+                                /* keepDocComments= */ false,
+                                /* keepEndPos= */ true,
+                                /* keepLineMap= */ false);
+        JCTree.JCExpression exp;
+        try {
+            exp = parser.parseExpression();
+        } catch (Throwable e) {
+            throw new ParseException(e.getMessage());
+        }
+        int len = (parser.getEndPos(exp) - exp.getStartPosition());
+        if (len != guardedByString.length()) {
+            throw new ParseException("Didn't parse entire string.");
+        }
+        return exp;
     }
 
     @Override

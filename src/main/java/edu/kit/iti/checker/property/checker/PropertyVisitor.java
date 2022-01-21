@@ -16,25 +16,22 @@
  */
 package edu.kit.iti.checker.property.checker;
 
+import com.sun.source.util.TreePath;
+import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
+import edu.kit.iti.checker.property.config.Config;
+import edu.kit.iti.checker.property.printer.JavaJMLPrinter;
+import edu.kit.iti.checker.property.printer.PrettyPrinter;
+import edu.kit.iti.checker.property.subchecker.lattice.LatticeVisitor.Result;
+import edu.kit.iti.checker.property.util.FileUtils;
+import org.checkerframework.common.basetype.BaseTypeChecker;
+import org.checkerframework.common.basetype.BaseTypeVisitor;
+
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.List;
-
-import edu.kit.iti.checker.property.printer.SMTPrinter;
-import org.checkerframework.common.basetype.BaseTypeChecker;
-import org.checkerframework.common.basetype.BaseTypeVisitor;
-
-import com.sun.source.util.TreePath;
-import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
-
-import edu.kit.iti.checker.property.config.Config;
-import edu.kit.iti.checker.property.printer.JavaJMLPrinter;
-import edu.kit.iti.checker.property.printer.PrettyPrinter;
-import edu.kit.iti.checker.property.subchecker.lattice.LatticeVisitor.Result;
-import edu.kit.iti.checker.property.util.FileUtils;
 
 public class PropertyVisitor extends BaseTypeVisitor<PropertyAnnotatedTypeFactory> {
 
@@ -52,20 +49,20 @@ public class PropertyVisitor extends BaseTypeVisitor<PropertyAnnotatedTypeFactor
         super.visit(path);
 
         File file = Paths.get(getPropertyChecker().getOutputDir(), getRelativeSourceFileName()).toFile();
-        File fileS = Paths.get(getPropertyChecker().getOutputDir(), "test.smt").toFile();
+//        File fileS = Paths.get(getPropertyChecker().getOutputDir(), "test.smt").toFile();
         file.getParentFile().mkdirs();
-        fileS.getParentFile().mkdirs();
+//        fileS.getParentFile().mkdirs();
         FileUtils.createFile(file);
-        FileUtils.createFile(fileS);
+//        FileUtils.createFile(fileS);
 
         //test usage of SMTPrinter. Must not be here!
-        try (BufferedWriter outS = new BufferedWriter(new FileWriter(fileS))) {
-            SMTPrinter printerS = new SMTPrinter(outS, true);
-            printerS.printUnit((JCCompilationUnit) path.getCompilationUnit(), null);
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.exit(1);
-        }
+        //try (BufferedWriter outS = new BufferedWriter(new FileWriter(fileS))) {
+        //    SMTPrinter printerS = new SMTPrinter(outS, true);
+        //    printerS.printUnit((JCCompilationUnit) path.getCompilationUnit(), null);
+        //} catch (IOException e) {
+        //    e.printStackTrace();
+        //    System.exit(1);
+        //}
 
         try (BufferedWriter out = new BufferedWriter(new FileWriter(file))) {
         	List<Result> results = getPropertyChecker().getResults(getAbsoluteSourceFileName());

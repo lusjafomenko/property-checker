@@ -5,9 +5,6 @@ import edu.kit.iti.checker.property.checker.qual.*;
 
 public class SimpleTest {
 
-        public SimpleTest() {
-        
-        }
 	
 	public int t;
 	public int v = 1;
@@ -21,7 +18,7 @@ public class SimpleTest {
 	public final int y = x * 2;
 	
 	public static @Interval(min = "1", max = "var+1") int addOne(@Interval(min = "0", max = "var5")int var, int var5, String var6) {
-		@Interval(min = "0", max = "z") int m = var + 1;
+		@Interval(min = "0", max = "r") int m = var + 1;
 		return m;
 	} 
 	
