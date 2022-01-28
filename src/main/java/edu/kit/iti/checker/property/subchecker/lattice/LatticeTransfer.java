@@ -20,7 +20,35 @@ import org.checkerframework.checker.initialization.InitializationTransfer;
 
 public class LatticeTransfer extends InitializationTransfer<LatticeValue, LatticeTransfer, LatticeStore> {
 
+    /** The Lattice type factory. */
+    //protected final LatticeAnnotatedTypeFactory atypeFactory;
+
+    /** The Lattice type factory. */
+    //protected final QualifierHierarchy hierarchy;
+
     public LatticeTransfer(LatticeAnalysis analysis) {
         super(analysis);
     }
+
+    /**
+     * Create a new LatticeTransfer.
+     *
+     * @param analysis the corresponding analysis
+     */
+    //public LatticeTransfer(CFAbstractAnalysis<LatticeValue, LatticeStore, LatticeTransfer> analysis) {
+    //    super(analysis);
+    //    atypeFactory = (LatticeAnnotatedTypeFactory) analysis.getTypeFactory();
+    //    hierarchy = atypeFactory.getQualifierHierarchy();
+    //}
+
+    enum ComparisonOperators {
+        EQUAL,
+        NOT_EQUAL,
+        GREATER_THAN,
+        GREATER_THAN_EQ,
+        LESS_THAN,
+        LESS_THAN_EQ;
+    }
+
+
 }
