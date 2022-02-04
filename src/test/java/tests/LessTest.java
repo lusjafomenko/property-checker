@@ -22,17 +22,16 @@ import java.util.List;
 import org.junit.runners.Parameterized.Parameters;
 
 @SuppressWarnings("nls")
-public class SMTtest extends PropertyCheckerTest {
-    public SMTtest(List<File> testFiles) {
+public class LessTest extends PropertyCheckerTest {
+    public LessTest(List<File> testFiles) {
         super(
                 testFiles,
-                "tests/property/SMTtest/lattice_interval" + 
-                ",tests/property/SMTtest/lattice_less",
-                "tests/property/SMTtest");
+                "tests/property/LessTest/lattice_less",
+                "tests/property/LessTest");
     }
 
     @Parameters
     public static String[] getTestDirs() {
-        return new String[] {"property/SMTtest"};
+        return new String[] {"property/LessTest"};
     }
 }

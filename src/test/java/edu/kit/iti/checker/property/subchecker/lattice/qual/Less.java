@@ -14,25 +14,20 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  */
-package tests;
+package edu.kit.iti.checker.property.subchecker.lattice.qual;
 
-import java.io.File;
-import java.util.List;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-import org.junit.runners.Parameterized.Parameters;
+import org.checkerframework.framework.qual.TargetLocations;
+import org.checkerframework.framework.qual.TypeUseLocation;
 
-@SuppressWarnings("nls")
-public class SMTtest extends PropertyCheckerTest {
-    public SMTtest(List<File> testFiles) {
-        super(
-                testFiles,
-                "tests/property/SMTtest/lattice_interval" + 
-                ",tests/property/SMTtest/lattice_less",
-                "tests/property/SMTtest");
-    }
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE_USE, ElementType.TYPE_PARAMETER})
+@TargetLocations({TypeUseLocation.EXPLICIT_LOWER_BOUND, TypeUseLocation.EXPLICIT_UPPER_BOUND})
+public @interface Less {
 
-    @Parameters
-    public static String[] getTestDirs() {
-        return new String[] {"property/SMTtest"};
-    }
+    String value();
 }

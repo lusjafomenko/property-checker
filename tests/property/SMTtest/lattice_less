@@ -1,0 +1,12 @@
+ident less;
+
+annotation LessAny() any :<==> "true" for "true";
+annotation LessBottom() any :<==> "false" for "true";
+
+annotation Less(int value) int
+    :<==> "§subject§ < §value§"
+    for "§value§ > 0";
+
+relation LessBottom() <: Less(y) :<==> "true";
+relation Less(x) <: LessAny() :<==> "true";
+relation Less(x) <: Less(y) :<==> "§x§ < §y§";

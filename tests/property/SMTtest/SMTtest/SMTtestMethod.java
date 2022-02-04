@@ -20,20 +20,25 @@ import edu.kit.iti.checker.property.subchecker.lattice.qual.*;
 
 public class SMTtestMethod {
 	
+	public @Less(value = "5") int v1 = 2;
+
 	public final int z = 10;
-	public final int x = 1;
+	public final @Interval(min = "0", max = "z") int x = 1;
+	String s = "ImAString";
 	
-	final int area = 20;
+	final @Interval(min = "0", max = "100") int area = 20;
+	final int are1 = area;
 	final int gardenArea = 50;
 	final int noEntryArea = 10;
+	final int maximum = 1000;
 	
 	//public @Interval(min = "0", max = "z") int t1 = x;
-	public @Interval(min = "0", max = "x") int t = 1 + 0;
+	public @Interval(min = "0", max = "x") int t = 1 + 0 + 0;
 	
 	//public @Interval(min = "0", max = "x") int t3 = z + 5;
 	
 	
-	int maxInv = (area + gardenArea - noEntryArea) / 3;
+	public @Interval(min = "0", max = "maximum") int maxInv = (area + gardenArea - noEntryArea) / 3;
 	
 	//@Interval(min = "0", max = "z") int testVar = dummy();
 
@@ -48,7 +53,7 @@ public class SMTtestMethod {
 		return m2;
 	}
 	
-	public @Interval(min = "1 * x", max = "m + 1 * 1") int dummy3(@Interval(min = "0", max = "z") int m) {
+	public static @Interval(min = "1 * x", max = "m + 1 * 1") int dummy3(@Interval(min = "0", max = "z") int m, int second) {
 		int m2 = m + 1;
 		return m2;
 	}
@@ -64,7 +69,8 @@ public class SMTtestMethod {
 	}
 	
 	public static void main(String[] args) {
-		@Interval(min = "0", max = "area") int t2 = 5 + 1;
+		int eight = 8;
+		@Interval(min = "0", max = "area") int t2 = dummy3(5, eight);
 		//final int x = 1;
 		
 		

@@ -31,9 +31,10 @@ public class SMTPrinter extends PrettyPrinter {
     protected PropertyChecker checker;
     protected PropertyAnnotatedTypeFactory propertyFactory;
     protected String methodName = null;
+    protected String varName = null;
     Map <String, PropertyAnnotationType> annotationTypes = new HashMap<>();
 
-    public SMTPrinter(Writer out, boolean sourceOutput, PropertyAnnotation pa, PropertyChecker checker) throws IOException {
+    public SMTPrinter(String varName, Writer out, boolean sourceOutput, PropertyAnnotation pa, PropertyChecker checker) throws IOException {
         super(out, sourceOutput);
         this.varDecs = new ArrayList<String>();
         this.pa = pa;
@@ -45,6 +46,7 @@ public class SMTPrinter extends PrettyPrinter {
             LatticeAnnotatedTypeFactory lf = (LatticeAnnotatedTypeFactory) typeChecker.getTypeFactory();
             this.annotationTypes.putAll(lf.getLattice().getAnnotationTypes());
         }
+        this.varName = varName;
     }
 
     public SMTPrinter(Writer out, boolean sourceOutput, PropertyAnnotation pa, PropertyChecker checker, String methodName) throws IOException {
@@ -97,7 +99,12 @@ public class SMTPrinter extends PrettyPrinter {
                             getParametersFromAnnotation(anno.toString(), parsedParam);
                             visitAnnotation(anno, tree.name.toString(), parsedCond, parsedParam, parsedParamNames);
                         }
+
                     }
+                //    if (varName != null && varName.equals(tree.name.toString())) {
+                //        System.out.println("hoho");
+                //        return;
+                //    }
 
                 }
 
@@ -183,7 +190,7 @@ public class SMTPrinter extends PrettyPrinter {
                 String repSub = s.replaceAll("§subject§", name);
                 repConds.add(repSub);
             }
-            if(!(methodName == null) && !(methodName.equals("main"))) {
+            if(!(methodName == null)  && !(methodName.equals("main"))) {
                 String wfCond = "(assert (and " + toSMT(parseStringAnno(repConds.get(1))) + " " + toSMT(parseStringAnno(repConds.get(0))) + "))";
                 print(wfCond);
                 println();
@@ -549,6 +556,12 @@ public class SMTPrinter extends PrettyPrinter {
         }
 
 
+    }
+
+    public void printLineFromKnowledge (String line) {
+        if (line.contains("=")) {
+            //JCTree.JCVariableDecl tree =
+        }
     }
 
 

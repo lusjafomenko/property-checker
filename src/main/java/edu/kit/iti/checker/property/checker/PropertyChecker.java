@@ -16,31 +16,22 @@
  */
 package edu.kit.iti.checker.property.checker;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.PriorityQueue;
+import edu.kit.iti.checker.property.config.Config;
+import edu.kit.iti.checker.property.subchecker.lattice.LatticeSubchecker;
+import edu.kit.iti.checker.property.subchecker.lattice.LatticeVisitor;
+import org.apache.commons.io.FileUtils;
+import org.checkerframework.common.basetype.BaseTypeChecker;
+import org.checkerframework.framework.source.SupportedOptions;
 
 import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
-
-import org.apache.commons.io.FileUtils;
-import org.checkerframework.common.basetype.BaseTypeChecker;
-import org.checkerframework.framework.source.SupportedOptions;
-
-import edu.kit.iti.checker.property.config.Config;
-import edu.kit.iti.checker.property.subchecker.lattice.LatticeSubchecker;
-import edu.kit.iti.checker.property.subchecker.lattice.LatticeVisitor;
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.*;
 
 @SupportedOptions({
     Config.LATTICES_FILE_OPTION,
@@ -57,6 +48,11 @@ public class PropertyChecker extends BaseTypeChecker {
     private boolean collectingSubcheckers = false;
 
     private URLClassLoader projectClassLoader;
+
+    public ArrayList<String> transferResultStrings= new ArrayList<String>();
+
+    public HashMap<String, ArrayList<String>> resultsForVar = new HashMap<>();
+    public HashMap<String, ArrayList<String>> usedVarForVar = new HashMap<>();
 
     public PropertyChecker() { }
 
