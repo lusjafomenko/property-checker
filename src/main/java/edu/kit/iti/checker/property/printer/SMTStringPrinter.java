@@ -24,6 +24,19 @@ public class SMTStringPrinter {
         return smt + "))";
     }
 
+    public String printVarAssign(JCTree.JCAssign tree) {
+        String smt = "";
+        smt = "(assert (= " + tree.lhs.toString() + " ";
+        if (tree.rhs.getClass().equals(JCTree.JCBinary.class)) {
+            smt = smt + printBinary((JCTree.JCBinary) tree.rhs);
+            //visitBinary((JCTree.JCBinary) tree.init, smt);
+        } else {
+            smt = smt + printExp(tree.rhs);
+            //printExpr(tree.init);
+        }
+        return smt + "))";
+    }
+
     public String printExp(JCTree.JCExpression tree) {
         String smt = "";
         return smt + tree.toString();

@@ -259,54 +259,18 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                 } else if (literal.getKind() == Kind.NULL_LITERAL && !pat.getSubjectType().isPrimitive()) {
                     success = epa.checkProperty(null);
                 }
-            } else {
-                System.out.println(getLatticeSubchecker().getParentChecker().resultsForVar);
-                PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
+            } else {//if (enclMethod == null) {
 
-                List<PropertyAnnotationType.Parameter> parL = pa.getAnnotationType().getParameters();
+                PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
                 PropertyChecker checker = getLatticeSubchecker().getParentChecker();
-                //System.out.println(checker.transferResultStrings);
-            //    System.out.println(checker.resultsForVar);
-            //    System.out.println("");
-            //    System.out.println(checker.usedVarForVar);
-           //     if (checker.resultsForVar.containsKey(varName)) {
-           //         System.out.println(varName);
-           //         System.out.println(checker.resultsForVar.get(varName));
-           //     }
-                //System.out.println(checker.resultsForVar.toString());
+
                 // create .smt file for the class
                 String smtName = getEnclClassName().toString() + varName + ".smt";
                 File file = Paths.get(getLatticeSubchecker().getParentChecker().getOutputDir(), smtName).toFile();
                 file.getParentFile().mkdirs();
                 FileUtils.createFile(file);
-                // replace parameters in annotation
-                if (!parL.isEmpty()) {
-                    // print class in .smt file
-//                    try (BufferedWriter outS = new BufferedWriter(new FileWriter(file))) {
-//                        SMTPrinter printerS = new SMTPrinter(varName, outS, true, pa, checker);
-//                        printerS.checkVarDec((JCTree.JCCompilationUnit) getCurrentPath().getCompilationUnit(), null);
-//                    } catch (IOException e) {
-//                        e.printStackTrace();
-//                        System.exit(1);
-//                    }
-    //                if (checker.resultsForVar.containsKey(varName)) {
-    //                    try {
-    //                        SMTFilePrinter printer = new SMTFilePrinter(file, checker, varName);
-    //                        ArrayList<String> results = checker.resultsForVar.get(varName);
-    //                        for (String r : results) {
-    //                            printer.printLine(r);
-    //                        }
-    //                        printer.print("(check-sat)");
-
-    //                    } catch (FileNotFoundException e) {
-    //                        e.printStackTrace();
-    //                    }
-                    printSMT(checker, file, pa);
-    //                }
-
-                    // start SMT-Solver from commandline
-                    success = checkWithZ3(smtName);
-                }
+                printSMT(checker, file, pa);
+                success = checkWithZ3(smtName);
             }
         } else if (!success) {
             PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
@@ -314,28 +278,15 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
             if (!pa.getActualParameters().isEmpty()) {
                 for (String p : pa.getActualParameters()) {
-                    if (!isNumeric(p)) {
-                        if (!checker.usedVarForVar.get(varName).contains(p)) {
-                            checker.usedVarForVar.get(varName).add(p);
-                        }
-                        if (checker.resultsForVar.containsKey(p)) {
-                            checker.resultsForVar.get(varName).addAll(checker.resultsForVar.get(p));
-                        }
-                    }
+                    parseExprArg(p, checker.resultsForVar.get(varName), checker.usedVarForVar.get(varName));
                 }
             }
 
-            //System.out.println("");
-            //System.out.println(varName);
-            //System.out.println("");
-            //System.out.println(pa.toString());
             String methodName = null;
-
-            //PropertyChecker checker = getLatticeSubchecker().getParentChecker();
-       //     if (checker.resultsForVar.containsKey(varName)) {
-       //         System.out.println(varName);
-       //         System.out.println(checker.resultsForVar.get(varName));
-       //     }
+        //    if (enclMethod != null) {
+        //        System.out.println("!!!!!!!!" + enclMethod.getModifiers());
+        //        System.out.println(enclMethod.getBody().getStatements());
+        //    }
 
             if (enclMethod != null) {
                 methodName = getEnclMethodNameName().toString();
@@ -478,6 +429,7 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
             line = brCleanUp.readLine();
             System.out.println(varName);
+            System.out.println(smtName);
             System.out.println("[Stdout] " + line);
             if (line.equals("unsat")) success = true;
             brCleanUp.close();
@@ -490,6 +442,42 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
     private static boolean isNumeric(String str){
         return str != null && str.matches("[0-9.]+");
+    }
+
+    private static boolean isOperand(String str) {
+        if (str.equals("*")) return true;
+        if (str.equals("/")) return true;
+        if (str.equals("+")) return true;
+        if (str.equals("-")) return true;
+        if (str.equals("%")) return true;
+        return false;
+    }
+
+    private void parseExprArg(String exprArg, ArrayList<String> knowledge, ArrayList<String> vars) {
+        String [] arArgs = exprArg.split(" ");
+        for (int i = 0; i < arArgs.length; i++) {
+            if (!isNumeric(arArgs[i]) && !isOperand(arArgs[i]))  {
+                if (!vars.contains(arArgs[i])) {
+                    vars.add(arArgs[i]);
+                }
+                if (atypeFactory.getChecker().getParentChecker().usedVarForVar.containsKey(arArgs[i])) {
+                    for (String k : atypeFactory.getChecker().getParentChecker().usedVarForVar.get(arArgs[i])) {
+                        if (!vars.contains(k)) {
+                            vars.add(k);
+                        }
+                    }
+                }
+                if (atypeFactory.getChecker().getParentChecker().resultsForVar.containsKey(arArgs[i])) {
+                    for (String res : atypeFactory.getChecker().getParentChecker().resultsForVar.get(arArgs[i])) {
+                        if (!knowledge.contains(res)) {
+                            knowledge.add(res);
+                        }
+                    }
+                    return;
+                }
+            }
+
+        }
     }
 
     public static class Result {

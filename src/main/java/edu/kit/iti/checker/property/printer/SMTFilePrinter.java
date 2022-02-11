@@ -29,7 +29,7 @@ public class SMTFilePrinter extends PrintWriter {
             LatticeAnnotatedTypeFactory lf = (LatticeAnnotatedTypeFactory) typeChecker.getTypeFactory();
             this.annotationTypes.putAll(lf.getLattice().getAnnotationTypes());
         }
-        print("(set-logic QF_UFLIA)");
+        print("(set-logic QF_UFNIA)");
         println();
 
     }
@@ -57,7 +57,9 @@ public class SMTFilePrinter extends PrintWriter {
 
     public void printProperty(String prop) {
         String ident = getAnnoIdent(prop);
-        ArrayList<String> pNames = getAnnoParamNames(prop);
+        //ArrayList<String> pNames = getAnnoParamNames(prop);
+        //getParameterNames(ident);
+        ArrayList<String> pNames = getParameterNames(ident);
         ArrayList<String> passedParams = new ArrayList<String>();
         getPassedParams(prop, passedParams);
         String varName = getVarName(prop);
@@ -282,6 +284,24 @@ public class SMTFilePrinter extends PrintWriter {
             prop = prop.replace("§subject§", name);
         }
         return prop;
+    }
+
+    private ArrayList<String> getParameterNames(String ident) {
+        ArrayList<String> pNames = new ArrayList<String>();
+        //System.out.println("!!!!!!!" + annotationTypes);
+        if (annotationTypes.containsKey(ident)) {
+            String typeDef = annotationTypes.get(ident).toString();
+            //System.out.println("!!!!!!!" + typeDef);
+            String params = typeDef.substring(typeDef.indexOf("(") + 1, typeDef.indexOf(")"));
+            //System.out.println("????????" + params);
+            String[] splittedParams = params.split(", ");
+            for (String s : splittedParams) {
+                String[] typeAndName = s.split(" ");
+                pNames.add(typeAndName[1]);
+            }
+        }
+        //System.out.println("=======" + pNames);
+        return pNames;
     }
 
 }
