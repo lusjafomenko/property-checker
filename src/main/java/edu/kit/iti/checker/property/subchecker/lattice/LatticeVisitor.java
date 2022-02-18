@@ -63,6 +63,8 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
     private boolean enclStaticInitBlock = false;
     private boolean enclInstanceInitBlock = false;
     private String varName = "";
+    private boolean isMethodInvocation = false;
+    private boolean checkingMethodArgs = false;
 
     protected LatticeVisitor(BaseTypeChecker checker, LatticeAnnotatedTypeFactory typeFactory) {
         super(checker);
@@ -83,6 +85,9 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
     @Override
     public Void visitReturn(ReturnTree node, Void p) {
+        //System.out.println("!!!!!!!!visiting return");
+        //System.out.println(node.getExpression());
+        this.varName = node.getExpression().toString();
         call(() -> super.visitReturn(node, p), () -> result.malTypedReturns.add(node));
         return null;
     }
@@ -137,6 +142,41 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
     public Void visitMethod(MethodTree node, Void p) {
         MethodTree prevEnclMethod = enclMethod;
         enclMethod = node;
+        System.out.println("!!!!!!!!!!!!!!visiting method " + node.getName());
+
+    //    System.out.println("visiting method : " + enclMethod.toString());
+    //    System.out.println(enclMethod.getModifiers().getAnnotations());
+    //    if (!enclMethod.getModifiers().getAnnotations().isEmpty()) {
+    //        for (AnnotationTree annoTree : enclMethod.getModifiers().getAnnotations()) {
+    //            System.out.println(annoTree.getAnnotationType());
+    //        }
+    //        if (!enclMethod.getBody().getStatements().isEmpty()) {
+    //            for (StatementTree sTree : enclMethod.getBody().getStatements()) {
+    //                System.out.println("Statement:: " + sTree);
+    //                if (sTree.toString().contains("return")) {
+    //                    System.out.println("return statement:: " + sTree.toString().replace("return ", ""));
+    //                    this.varName = sTree.toString().replace("return ", "");
+    //                }
+    //            }
+    //        }
+    //    }
+        String key = enclClass.getSimpleName().toString() + "." + enclMethod.getName().toString();
+        if (getLatticeSubchecker().getParentChecker().invokedMethods.containsKey(key)
+                && getLatticeSubchecker().getParentChecker().invokedMethods.get(key).isEmpty()) {
+        //    System.out.println("!!!!!!!visiting one of the invoked methods");
+
+            if (!enclMethod.getModifiers().getAnnotations().isEmpty()) {
+                for (AnnotationTree annoTree : enclMethod.getModifiers().getAnnotations()) {
+                    getLatticeSubchecker().getParentChecker().invokedMethods.get(key).add(annoTree.toString());
+                }
+            }
+            if (!enclMethod.getParameters().isEmpty()) {
+                for (VariableTree methodParameter : enclMethod.getParameters()) {
+                    getLatticeSubchecker().getParentChecker().invokedMethods.get(key).add(methodParameter.toString());
+                }
+            }
+        //    System.out.println(getLatticeSubchecker().getParentChecker().invokedMethods);
+        }
 
         ExecutableElement methodElement = TreeUtils.elementFromDeclaration(node);
         Map<AnnotatedDeclaredType, ExecutableElement> overriddenMethods =
@@ -199,12 +239,19 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
             List<? extends ExpressionTree> passedArgs,
             CharSequence executableName,
             List<?> paramNames) {
+
+    //    System.out.println("required arguments of the " + executableName + " are " + requiredArgs);
+    //    System.out.println("passed arguments are " + passedArgs);
+    //    System.out.println("parameter names are " + paramNames);
         Pair<Tree, AnnotatedTypeMirror> preAssCtxt = visitorState.getAssignmentContext();
         try {
             for (int i = 0; i < requiredArgs.size(); ++i) {
+                this.checkingMethodArgs = true;
                 visitorState.setAssignmentContext(Pair.of((Tree) null, (AnnotatedTypeMirror) requiredArgs.get(i)));
 
                 final int idx = i;
+                this.varName = paramNames.get(i).toString();
+    //            System.out.println("=======now is the var name: " + this.varName);
                 call(
                         () -> commonAssignmentCheck(requiredArgs.get(idx), passedArgs.get(idx), "argument.type.incompatible"), //$NON-NLS-1$
                         () -> {
@@ -217,6 +264,7 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                         });
 
                 scan(passedArgs.get(i), null);
+                this.checkingMethodArgs = false;
             }
         } finally {
             visitorState.setAssignmentContext(preAssCtxt);
@@ -225,10 +273,28 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
     @Override
     protected void commonAssignmentCheck(Tree varTree, ExpressionTree valueExp, @CompilerMessageKey String errorKey, Object... extraArgs) {
+        //System.out.println("varTree:: " + varTree.toString());
+        //System.out.println("value esxpression::" + valueExp.toString());
+        //System.out.println("value esxpression type::" + valueExp.getKind());
         if (varTree.getKind().name().equals("VARIABLE")) {
             JCTree.JCVariableDecl var = (JCTree.JCVariableDecl) varTree;
             this.varName = var.getName().toString();
+        //    System.out.println(varName + " " + varTree.getKind().name());
             //System.out.println("from cas:  " + ((JCTree.JCVariableDecl) varTree).init.getStartPosition());
+        } else if (varTree.getKind().name().equals("IDENTIFIER")){
+            JCTree.JCIdent var = (JCTree.JCIdent) varTree;
+            this.varName = var.getName().toString();
+        //    System.out.println(varName + " " + varTree.getKind().name());
+            //System.out.println("???????" + varTree.getKind().name());
+            //this.varName = null;
+        } else {
+        //    System.out.println(varTree + " " + varTree.getKind().name());
+        }
+        if (valueExp.getKind().name().equals("METHOD_INVOCATION")) {
+        //    System.out.println("§§§§§§" + varTree.getKind().name());
+            this.isMethodInvocation = true;
+        } else {
+            this.isMethodInvocation = false;
         }
         super.commonAssignmentCheck(varTree, valueExp, errorKey, extraArgs);
     }
@@ -243,70 +309,89 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
         commonAssignmentCheckStartDiagnostic(varType, valueType, valueTree);
 
         AnnotatedTypeMirror widenedValueType = atypeFactory.getWidenedType(valueType, varType);
+        PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
+    //    System.out.println("for the variable " + varName + " there is a property annotation " + pa + " and the varType is " + varType);
+    //    System.out.println("the value tree is " + valueTree);
+        PropertyChecker checker = getLatticeSubchecker().getParentChecker();
         boolean success = atypeFactory.getTypeHierarchy().isSubtype(widenedValueType, varType);
 
         if (!success && valueTree instanceof LiteralTree) {
             LiteralTree literal = (LiteralTree) valueTree;
-    //        System.out.println(literal.toString());
             EvaluatedPropertyAnnotation epa = getLatticeSubchecker().getTypeFactory().getLattice().getEvaluatedPropertyAnnotation(varType);
 
             if (epa != null) {
                 PropertyAnnotationType pat = epa.getAnnotationType();
-
                 Class<?> literalClass = ClassUtils.literalKindToClass(literal.getKind());
                 if (literalClass != null && literalClass.equals(pat.getSubjectType())) {
                     success = epa.checkProperty(literal.getValue());
                 } else if (literal.getKind() == Kind.NULL_LITERAL && !pat.getSubjectType().isPrimitive()) {
                     success = epa.checkProperty(null);
                 }
-            } else {//if (enclMethod == null) {
 
-                PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
-                PropertyChecker checker = getLatticeSubchecker().getParentChecker();
-
-                // create .smt file for the class
-                String smtName = getEnclClassName().toString() + varName + ".smt";
-                File file = Paths.get(getLatticeSubchecker().getParentChecker().getOutputDir(), smtName).toFile();
-                file.getParentFile().mkdirs();
-                FileUtils.createFile(file);
+            } else if (!isMethodInvocation) {
+                if (!pa.getActualParameters().isEmpty()) {
+                    for (String p : pa.getActualParameters()) {
+                        parseExprArg(p, checker.resultsForVar.get(varName), checker.usedVarForVar.get(varName));
+                    }
+                }
+                // create .smt file, write SMT-conditions and check with z3;
+                String smtName = getSMTFileName(varName);
+                File file = createSMTFile(smtName);
                 printSMT(checker, file, pa);
+        //        System.out.println("!!!!!!!!!checking not method invocation and literal " + varName);
                 success = checkWithZ3(smtName);
             }
-        } else if (!success) {
-            PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
-            PropertyChecker checker = getLatticeSubchecker().getParentChecker();
+        } else if (!success && isMethodInvocation) {
+
+            if (this.checkingMethodArgs) {
+                checker.resultsForVar.put(varName, new ArrayList<>());
+                checker.usedVarForVar.put(varName, new ArrayList<>());
+                if (!pa.getActualParameters().isEmpty()) {
+                    for (String p : pa.getActualParameters()) {
+                        parseExprArg(p, checker.resultsForVar.get(varName), checker.usedVarForVar.get(varName));
+                    }
+                }
+                // create .smt file for the class
+                String smtName = getSMTFileName(varName);
+                File file = createSMTFile(smtName);
+                printSMT(checker, file, pa);
+                //this.isMethodInvocation = false;
+        //        System.out.println("!!!!!!!!!checking method invocation and arguments " + varName);
+                success = checkWithZ3(smtName);
+                checker.resultsForVar.remove(varName);
+                checker.usedVarForVar.remove(varName);
+            } else {
 
             if (!pa.getActualParameters().isEmpty()) {
                 for (String p : pa.getActualParameters()) {
                     parseExprArg(p, checker.resultsForVar.get(varName), checker.usedVarForVar.get(varName));
                 }
             }
-
-            String methodName = null;
-        //    if (enclMethod != null) {
-        //        System.out.println("!!!!!!!!" + enclMethod.getModifiers());
-        //        System.out.println(enclMethod.getBody().getStatements());
-        //    }
-
-            if (enclMethod != null) {
-                methodName = getEnclMethodNameName().toString();
-       //         System.out.println(methodName + " " + varName + ":" + pa.toString());
-                String smtName = getEnclClassName().toString() + methodName + varName + ".smt";
-                File file = Paths.get(getLatticeSubchecker().getParentChecker().getOutputDir(), smtName).toFile();
-                file.getParentFile().mkdirs();
-                FileUtils.createFile(file);
-                printSMT(checker, file, pa);
-//                printMethodToSMT(pa, smtName, methodName);
-                success = checkWithZ3(smtName);
-            } else {
-                String smtName = getEnclClassName().toString() + varName + ".smt";
-                File file = Paths.get(getLatticeSubchecker().getParentChecker().getOutputDir(), smtName).toFile();
-                file.getParentFile().mkdirs();
-                FileUtils.createFile(file);
-                printSMT(checker, file, pa);
-//                printMethodToSMT(pa, smtName, methodName);
-                success = checkWithZ3(smtName);
+            // create .smt file for the class
+            String smtName = getSMTFileName(varName);
+            File file = createSMTFile(smtName);
+            printSMT(checker, file, pa);
+            //this.isMethodInvocation = false;
+        //        System.out.println("!!!!!!!!!checking method invocation and literal " + varName);
+            success = checkWithZ3(smtName);
             }
+            //this.isMethodInvocation = false;
+        } else if (!success && !isMethodInvocation) {
+            if (enclMethod != null && checker.methodReturnVars.containsKey(enclMethod.getName().toString())) {
+                System.out.println("annotations of enclosing method :: " + enclMethod.getModifiers().getAnnotations());
+            }
+
+            if (!pa.getActualParameters().isEmpty()) {
+                for (String p : pa.getActualParameters()) {
+                    parseExprArg(p, checker.resultsForVar.get(varName), checker.usedVarForVar.get(varName));
+                }
+            }
+            String smtName = getSMTFileName(varName);
+            File file = createSMTFile(smtName);
+            printSMT(checker, file, pa);
+        //    System.out.println("!!!!!!!!!checking not method invocation and not literal " + varName);
+            success = checkWithZ3(smtName);
+
         }
         commonAssignmentCheckEndDiagnostic(success, null, varType, valueType, valueTree);
 
@@ -451,6 +536,24 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
         if (str.equals("-")) return true;
         if (str.equals("%")) return true;
         return false;
+    }
+
+    int count = 0;
+    private String getSMTFileName (String varName) {
+        //int count = 0;
+        String smtName = getEnclClassName().toString() + varName + "_" + count + ".smt";
+        if (enclMethod != null) {
+            smtName = getEnclClassName().toString() + getEnclMethodNameName().toString() + varName + "_" + count + ".smt";
+        }
+        count++;
+        return smtName;
+    }
+
+    private File createSMTFile (String smtName) {
+        File file = Paths.get(getLatticeSubchecker().getParentChecker().getOutputDir(), smtName).toFile();
+        file.getParentFile().mkdirs();
+        FileUtils.createFile(file);
+        return file;
     }
 
     private void parseExprArg(String exprArg, ArrayList<String> knowledge, ArrayList<String> vars) {

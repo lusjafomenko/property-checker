@@ -81,7 +81,7 @@ public class LatticeTransfer extends InitializationTransfer<LatticeValue, Lattic
             return result;
         }
         if (varAssign != null && varAssign.rhs.getClass().equals(JCTree.JCMethodInvocation.class)) {
-            System.out.println("assignement method invocation");
+        //    System.out.println("assignement method invocation");
             visitMethodInvocation((MethodInvocationNode) n.getOperands().toArray()[1], in);
             return result;
         }
@@ -137,7 +137,11 @@ public class LatticeTransfer extends InitializationTransfer<LatticeValue, Lattic
 
         // sout-test
         String target = n.getTarget().toString();
-        System.out.println(target + " :: visitMethodInvocation invoked");
+        //System.out.println(target + " :: visitMethodInvocation invoked");
+        //System.out.println("method :: " + n.getTarget().getMethod().getReturnType());
+        if (!n.getTarget().getMethod().getReturnType().toString().equals("void")) {
+            atypeFactory.getChecker().getParentChecker().invokedMethods.put(target.toString(), new ArrayList<>());
+        }
 
         // Lists to collect relative variable names and their values as context;
         ArrayList<String> relativeValues = new ArrayList<String>();
@@ -248,25 +252,72 @@ public class LatticeTransfer extends InitializationTransfer<LatticeValue, Lattic
         return result;
     }
 
-//@Override public TransferResult<LatticeValue, LatticeStore> visitClassName (ClassNameNode n, TransferInput<LatticeValue, LatticeStore> p) {
-//    TransferResult<LatticeValue, LatticeStore> result = super.visitClassName(n, p);
-//    System.out.println("!!!!!!!!!!!!!!!class");
-//    if (n != null) {
-//        this.className = n.toString();
-//        System.out.println(this.className);
-//    }
-//    return result;
-//}
+@Override public TransferResult<LatticeValue, LatticeStore> visitClassName (ClassNameNode n, TransferInput<LatticeValue, LatticeStore> p) {
+    //TransferResult<LatticeValue, LatticeStore> result = super.visitClassName(n, p);
+    //System.out.println("!!!!!!!!!!!!!!!class");
+    if (n != null) {
+        this.className = n.toString();
+    //    System.out.println("class name is now :: " + this.className);
+    }
+    TransferResult<LatticeValue, LatticeStore> result = super.visitClassName(n, p);
+    return result;
+}
 
-//    @Override public TransferResult<LatticeValue, LatticeStore> visitClassDeclaration (ClassDeclarationNode n, TransferInput<LatticeValue, LatticeStore> p) {
-//        TransferResult<LatticeValue, LatticeStore> result = super.visitClassDeclaration(n, p);
-//        System.out.println("!!!!!!!!!!class");
-//        if (n.getTree() != null) {
-//            this.className = n.getTree().toString();
-//            System.out.println(this.className);
-//        }
-//        return result;
-//    }
+@Override public TransferResult<LatticeValue, LatticeStore> visitReturn (ReturnNode n, TransferInput<LatticeValue, LatticeStore> p) {
+    //System.out.println("!!!!!!!!!!!!!!return");
+    if (n != null) {
+    //    System.out.println(n);
+    //    System.out.println(n.getTransitiveOperands());
+    //    System.out.println("return type::" + n.getType());
+    }
+    TransferResult<LatticeValue, LatticeStore> result = super.visitReturn(n, p);
+    return result;
+}
+
+@Override public TransferResult<LatticeValue, LatticeStore> visitMethodAccess (MethodAccessNode n, TransferInput<LatticeValue, LatticeStore> p) {
+    //System.out.println("!!!!!!!!!!!method access");
+    if (n != null) {
+    //    System.out.println(n);
+    //    System.out.println("class name :: " + this.className);
+
+    }
+    TransferResult<LatticeValue, LatticeStore> result = super.visitMethodAccess(n, p);
+    return result;
+}
+
+@Override public TransferResult<LatticeValue, LatticeStore> visitLocalVariable (LocalVariableNode n, TransferInput<LatticeValue, LatticeStore> p) {
+    //System.out.println("!!!!!!!!!!!local variable");
+    if (n != null) {
+        //System.out.println(n);
+        //System.out.println("type of the local var:: " + n.getType());
+        //System.out.println(n.getAssignmentContext());
+        if (n.getAssignmentContext() != null) {
+            //System.out.println(n.getAssignmentContext().getElementForType());
+            if (n.getAssignmentContext() instanceof AssignmentContext.MethodReturnContext && n.getType().toString().contains("int")) {
+                String el = n.getAssignmentContext().getElementForType().toString();
+                String methodName = el.substring(0 , el.indexOf("("));
+                atypeFactory.getChecker().getParentChecker().methodReturnVars.put(methodName, n.toString());
+                //System.out.println("return var:: " + n + " with type " + n.getType() + " in method " + methodName);
+                //System.out.println("????get block::" + n.getBlock());
+                //System.out.println("class name :: " + this.className);
+            }
+        }
+    }
+    //System.out.println("present method return vars:: " + atypeFactory.getChecker().getParentChecker().methodReturnVars);
+    TransferResult<LatticeValue, LatticeStore> result = super.visitLocalVariable(n, p);
+    return result;
+}
+
+ //   @Override public TransferResult<LatticeValue, LatticeStore> visitClassDeclaration (ClassDeclarationNode n, TransferInput<LatticeValue, LatticeStore> p) {
+ //       TransferResult<LatticeValue, LatticeStore> result = super.visitClassDeclaration(n, p);
+ //       System.out.println("!!!!!!!!!!class declaration");
+ //       if (n.getTree() != null) {
+ //           //this.className = n.getTree().toString();
+ //           System.out.println(this.className);
+ //       }
+ //       //TransferResult<LatticeValue, LatticeStore> result = super.visitClassDeclaration(n, p);
+ //       return result;
+ //   }
 
     // private method to get the variable name without (this). modifier;
     private String removeThisFromString (String in) {

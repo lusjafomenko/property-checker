@@ -54,6 +54,9 @@ public class PropertyChecker extends BaseTypeChecker {
     public HashMap<String, ArrayList<String>> resultsForVar = new HashMap<>();
     public HashMap<String, ArrayList<String>> usedVarForVar = new HashMap<>();
 
+    public HashMap<String, ArrayList<String>> invokedMethods = new HashMap<>();
+    public HashMap<String, String> methodReturnVars = new HashMap<>();
+
     public PropertyChecker() { }
 
     @Override

@@ -59,6 +59,7 @@ public class SMTtestMethod {
 	
 	public static @Interval(min = "1 * x", max = "m + 1 * 1") int dummy3(@Interval(min = "0", max = "are1") int m, int second) {
 		int m3 = m + 1;
+		@Interval(min = "0", max = "maximum") int dummyVar1 = 6;
 		return m3;
 	}
 	
@@ -68,6 +69,7 @@ public class SMTtestMethod {
 		inv = 4 + 1;
 		inv = x * t;
 		@Interval(min = "0", max = "maximum") int forInv = dummy3(5, 5);
+		@Interval(min = "0", max = "maximum") int dummyVar = 6;
 		//inv = dummy3(5, 5);
 		inv = forInv;
 		return inv;
@@ -75,7 +77,9 @@ public class SMTtestMethod {
 	
 	public @Interval(min = "m % 2", max = "m + 1 * 1") int dummy4(@Interval(min = "0", max = "maximum") int m) {
 		int m4 = m + 1;
-		@Interval(min = "0", max = "maxInv") int t8 = calculateInv();
+		@Interval(min = "0", max = "gardenArea") int t8 = calculateInv();
+		@Interval(min = "0", max = "10") int firstVar = 9;
+		@Interval(min = "0", max = "area") int secondVar = area;
 		return m4;
 	}
 	
