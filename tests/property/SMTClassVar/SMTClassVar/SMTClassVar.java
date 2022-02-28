@@ -6,7 +6,7 @@ public class SMTClassVar {
 	int a = 10;
 	int thousend = 1000;
 	
-	@Interval(min = "0", max = "a") int b = 5;
+	public @Interval(min = "0", max = "a") int b = 5;
 	@Interval(min = "0", max = "a") int c = b;
 	@Interval(min = "0", max = "a") int d = b + c;
 	

@@ -14,26 +14,17 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  */
-package tests;
+package edu.kit.iti.checker.property.subchecker.lattice.qual;
 
-import java.io.File;
-import java.util.List;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import org.checkerframework.framework.qual.DefaultQualifierInHierarchy;
+import org.checkerframework.framework.qual.SubtypeOf;
 
-import org.junit.runners.Parameterized.Parameters;
-
-@SuppressWarnings("nls")
-public class SMTtest extends PropertyCheckerTest {
-    public SMTtest(List<File> testFiles) {
-        super(
-                testFiles,
-                "tests/property/SMTtest/lattice_interval" + 
-                ",tests/property/SMTtest/lattice_less" + 
-                ",tests/property/SMTtest/lattice_length1",
-                "tests/property/SMTtest");
-    }
-
-    @Parameters
-    public static String[] getTestDirs() {
-        return new String[] {"property/SMTtest"};
-    }
-}
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE_USE})
+@DefaultQualifierInHierarchy
+@SubtypeOf({})
+public @interface UnknownLength1 {}

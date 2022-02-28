@@ -16,13 +16,12 @@
  */
 package tests;
 
-import java.io.File;
-import java.util.List;
-
+import edu.kit.iti.checker.property.checker.PropertyChecker;
 import org.apache.commons.lang3.ObjectUtils;
 import org.checkerframework.framework.test.CheckerFrameworkPerDirectoryTest;
 
-import edu.kit.iti.checker.property.checker.PropertyChecker;
+import java.io.File;
+import java.util.List;
 
 @SuppressWarnings("nls")
 public abstract class PropertyCheckerTest extends CheckerFrameworkPerDirectoryTest {
@@ -39,6 +38,7 @@ public abstract class PropertyCheckerTest extends CheckerFrameworkPerDirectoryTe
                 "-Anomsgtext",
                 "-Astubs=stubs/",
                 "-nowarn",
+                "-Aflowdotdir=../flowdot",
                 "-APropertyChecker_inDir=" + classesDir,
                 "-APropertyChecker_outDir=" + "../property-checker-out",
                 "-APropertyChecker_lattices=" + latticeFile,

@@ -49,13 +49,14 @@ public class PropertyChecker extends BaseTypeChecker {
 
     private URLClassLoader projectClassLoader;
 
-    public ArrayList<String> transferResultStrings= new ArrayList<String>();
+    public HashMap<String, ArrayList<String>> resultsForVar1 = new HashMap<>();
+    public HashMap<String, ArrayList<String>> usedVarForVar1 = new HashMap<>();
 
-    public HashMap<String, ArrayList<String>> resultsForVar = new HashMap<>();
-    public HashMap<String, ArrayList<String>> usedVarForVar = new HashMap<>();
+    public HashMap<String, ArrayList<String>> fields = new HashMap<>();
+    public HashMap<String, ArrayList<String>> fieldsUsedVars = new HashMap<>();
 
-    public HashMap<String, ArrayList<String>> invokedMethods = new HashMap<>();
-    public HashMap<String, String> methodReturnVars = new HashMap<>();
+    public HashMap<String, ArrayList<String>> typeAnnos = new HashMap<>();
+    public HashMap<String, HashMap<String, ArrayList<String>>> methodParam = new HashMap<>();
 
     public PropertyChecker() { }
 

@@ -87,12 +87,12 @@ public class SMTFilePrinter extends PrintWriter {
                 println();
             }
         } else {
-            print("(assert (or ");
-            for (String sa : smtAnnos) {
-                print("(not " + sa + ") ");
-            }
-            print("))");
-            println();
+        //    print("(assert (or ");
+        //    for (String sa : smtAnnos) {
+        //        print("(not " + sa + ") ");
+        //    }
+        //    print("))");
+        //    println();
         }
 
     }

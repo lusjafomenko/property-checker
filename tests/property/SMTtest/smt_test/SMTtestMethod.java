@@ -14,20 +14,34 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  */
-
+package smt_test;
 import java.util.*;
 import edu.kit.iti.checker.property.subchecker.lattice.qual.*;
 
 public class SMTtestMethod {
+
+
+	public final int maxAge = 150;
+	final @Interval(min = "0", max = "100") int area = 20;
+	final @Interval(min = "0", max = "maxAge") int age;
+	
+	public SMTtestMethod() {
+		this.age = 20;
+	}
+	
+	public SMTtestMethod(@Interval(min = "0", max = "150") int age1) {
+		this.age = age1;
+	}
 	
 	//public @Less(value = "5") int v1 = 2;
 
 	public final int z = 10;
 	int ten = 10;
+	int nine = 9;
 	public final @Interval(min = "0", max = "z") int x = 1;
 	String s = "ImAString";
 	
-	final @Interval(min = "0", max = "100") int area = 20;
+	
 	final int are1 = area;
 	final int gardenArea = 50;
 	final int noEntryArea = 10;
@@ -57,7 +71,7 @@ public class SMTtestMethod {
 		return m2;
 	}
 	
-	public static @Interval(min = "1 * x", max = "m + 1 * 1") int dummy3(@Interval(min = "0", max = "are1") int m, int second) {
+	public static @Interval(min = "1 * x", max = "m + 1 * 1") int dummy3(@Interval(min = "0", max = "nine") int m, int second) {
 		int m3 = m + 1;
 		@Interval(min = "0", max = "maximum") int dummyVar1 = 6;
 		return m3;
@@ -85,10 +99,12 @@ public class SMTtestMethod {
 	
 	public static void main(String[] args) {
 		int eight = 8;
+		int r = 10;
 		@Interval(min = "0", max = "z") int t6 = dummy3(eight, eight);
-		@Interval(min = "0", max = "area + 1") int t2 = dummy3(5, eight);
+		@Interval(min = "0", max = "area + 1") int t2 = dummy3(31, eight);
 		//final int x = 1;
 		@Interval(min = "0", max = "z") int t3 = t6;
+		@Interval(min = "x", max = "ten") int t10 = dummy3(4, r);
 		
 		
 		

@@ -22,327 +22,85 @@ import org.checkerframework.checker.initialization.InitializationTransfer;
 import org.checkerframework.dataflow.analysis.TransferInput;
 import org.checkerframework.dataflow.analysis.TransferResult;
 import org.checkerframework.dataflow.cfg.node.*;
-import org.checkerframework.framework.type.QualifierHierarchy;
 
-import javax.lang.model.element.VariableElement;
 import java.util.ArrayList;
 
 public class LatticeTransfer extends InitializationTransfer<LatticeValue, LatticeTransfer, LatticeStore> {
 
-    //** The Lattice type factory. *//*
     protected final LatticeAnnotatedTypeFactory atypeFactory;
-
-    //** The Lattice type factory. *//*
-    protected final QualifierHierarchy hierarchy;
-
-    protected String className = "";
 
     public LatticeTransfer(LatticeAnalysis analysis) {
         super(analysis);
         atypeFactory = (LatticeAnnotatedTypeFactory) analysis.getTypeFactory();
-        hierarchy = atypeFactory.getQualifierHierarchy();
     }
+
 
     @Override
     public TransferResult<LatticeValue, LatticeStore> visitAssignment(AssignmentNode n, TransferInput<LatticeValue, LatticeStore> in) {
         TransferResult<LatticeValue, LatticeStore> result = super.visitAssignment(n, in);
+        //System.out.println("ASSIGNMENT IN TRANSFER :: " + n.getTarget());
 
-        // Lists to collect relative variable names and their values as context;
         ArrayList<String> usedVars = new ArrayList<String>();
         ArrayList<String> relativeValues = new ArrayList<String>();
-
-    //    if (n.getOperands().toArray()[0] instanceof LocalVariableNode) {
-    //        System.out.println("local variable " + n.getOperands().toArray()[0]);
-    //        if (n.getBlock() != null) {
-    //            System.out.println(n.getBlock().getNodes());
-    //            List<Node> nodes = n.getBlock().getNodes();
-    //            for (Node nod : nodes) {
-    //                //System.out.println(nod.getAssignmentContext());
-    //                System.out.println(nod.toString() + " ::::" + nod.getType());
-    //            }
-    //        }
-    //    }
-        // by class vars "FieldAccessNode"
-        //System.out.println(n.getOperands().toArray()[0].getClass());
-
-        // The name of variable (for the moment without (this).);
-        String varName = removeThisFromString(n.getTarget().toString());
-
-        JCTree.JCVariableDecl varDec = null;
-        JCTree.JCAssign varAssign = null;
-
-        // JCTree to translate to SMT-lib, if method invocation assigned - nothing;
-        if (n.getTree().getClass().equals(JCTree.JCVariableDecl.class)) {
-            varDec = (JCTree.JCVariableDecl) n.getTree();
-        } else {
-            varAssign = (JCTree.JCAssign) n.getTree();
-        }
-        if (varDec != null && varDec.init.getClass().equals(JCTree.JCMethodInvocation.class)) {
-            return result;
-        }
-        if (varAssign != null && varAssign.rhs.getClass().equals(JCTree.JCMethodInvocation.class)) {
-        //    System.out.println("assignement method invocation");
-            visitMethodInvocation((MethodInvocationNode) n.getOperands().toArray()[1], in);
-            return result;
-        }
-
-        // SMTStringPrinter to translate the common assignement to SMT-lib assertion
+        JCTree.JCVariableDecl varDec;
         SMTStringPrinter printer = new SMTStringPrinter();
-        if (varDec != null) {
-            relativeValues.add(printer.printVarDec(varDec));
-        } else if (varAssign != null) {
-            relativeValues.add(printer.printVarAssign(varAssign));
-        }
 
-        // check if variable depends on other variables, add them to the context;
-        checkExpression(n.getExpression(), relativeValues, usedVars);
-
-        // assume the variable can have only one annotation if any;
-        if (!n.getTarget().getType().getAnnotationMirrors().isEmpty()) {
-
-            // add annotated type of the variable to the context;
-            String typeWithVarName = getAnnotationFromType(n.getTarget().getType().getAnnotationMirrors().get(0).toString(), varName);
-            if (!relativeValues.contains(typeWithVarName)) {
-                relativeValues.add(typeWithVarName);
-            }
-
-            // if annotation arguments are variables add them to the context;
-            ArrayList<String> passedAnnoArgs = new ArrayList<String>();
-            getPassedArgs(typeWithVarName, passedAnnoArgs);
-            if (!passedAnnoArgs.isEmpty()) {
-                for (String a : passedAnnoArgs) {
-                   parseExprArg(a, relativeValues, usedVars);
+        if (n.getTarget().toString().contains("(this).")) {
+            String var = removeThisFromString(n.getTarget().toString());
+            if (n.getTree().getClass().equals(JCTree.JCVariableDecl.class)) {
+                varDec = (JCTree.JCVariableDecl) n.getTree();
+                if (varDec != null) {
+                    relativeValues.add(printer.printVarDec(varDec));
                 }
-            }
-        }
+                checkExpression(n.getExpression(), relativeValues, usedVars);
 
-        atypeFactory.getChecker().getParentChecker().resultsForVar.put(varName, relativeValues);
-        atypeFactory.getChecker().getParentChecker().usedVarForVar.put(varName, usedVars);
+                if (!n.getTarget().getType().getAnnotationMirrors().isEmpty()) {
 
-        return result;
-    }
-
-    @Override
-    public TransferResult<LatticeValue, LatticeStore> visitFieldAccess(FieldAccessNode n, TransferInput<LatticeValue, LatticeStore> p) {
-        TransferResult<LatticeValue, LatticeStore> result = super.visitFieldAccess(n, p);
-        //System.out.println(n.getFieldName());
-        //System.out.println(result.toString());
-        return result;
-    }
-
-    @Override
-    public TransferResult<LatticeValue, LatticeStore> visitMethodInvocation(
-            MethodInvocationNode n, TransferInput<LatticeValue, LatticeStore> in) {
-        TransferResult<LatticeValue, LatticeStore> result = super.visitMethodInvocation(n, in);
-
-        // sout-test
-        String target = n.getTarget().toString();
-        //System.out.println(target + " :: visitMethodInvocation invoked");
-        //System.out.println("method :: " + n.getTarget().getMethod().getReturnType());
-        if (!n.getTarget().getMethod().getReturnType().toString().equals("void")) {
-            atypeFactory.getChecker().getParentChecker().invokedMethods.put(target.toString(), new ArrayList<>());
-        }
-
-        // Lists to collect relative variable names and their values as context;
-        ArrayList<String> relativeValues = new ArrayList<String>();
-        ArrayList<String> usedVars = new ArrayList<String>();
-
-        //String regex = atypeFactory.getChecker().getQualPackage() + ".";
-
-        // get variable name
-        String v = "";
-        if (n.getAssignmentContext() != null) {
-            if (n.getAssignmentContext().getContextTree() != null) {
-                if (n.getAssignmentContext().getContextTree().getClass().equals(JCTree.JCVariableDecl.class)) {
-                    JCTree.JCVariableDecl tree = (JCTree.JCVariableDecl) n.getAssignmentContext().getContextTree();
-                    v = tree.name.toString();
-                    System.out.println("v := " + v);
-                }
-                if (n.getAssignmentContext().getContextTree().getClass().equals(JCTree.JCAssign.class)) {
-                    JCTree.JCAssign tree = (JCTree.JCAssign) n.getAssignmentContext().getContextTree();
-                    v = tree.lhs.toString();
-                }
-            }
-        }
-
-        // get method return type and create temp variable
-        String methodReturnType = "";
-        if (!n.getTarget().getMethod().getReturnType().getAnnotationMirrors().isEmpty()) {
-            methodReturnType = n.getTarget().getMethod().getReturnType().getAnnotationMirrors().get(0).toString();
-            methodReturnType = getAnnotationFromType(methodReturnType, v);
-            methodReturnType = methodReturnType + "TEMP";
-
-            usedVars.add(v + "TEMP");
-            relativeValues.add("(assert (= " + v + " " + v + "TEMP" + "))");
-            //System.out.println("method return type : " + methodReturnType);
-        }
-        relativeValues.add(methodReturnType);
-
-        // add annotation arguments of the method return type to the context;
-        ArrayList<String> passedAnnoArgs = new ArrayList<String>();
-        getPassedArgs(methodReturnType, passedAnnoArgs);
-        if (!passedAnnoArgs.isEmpty()) {
-            for (String a : passedAnnoArgs) {
-                String[] ar = a.split(" ");
-                for (String s : ar) {
-                    addInfoToContext(s, relativeValues, usedVars);
-                }
-            }
-        }
-
-        if (!n.getOperands().isEmpty() && (n.getOperands().size() > 1)) {
-            // get actual method parameters;
-            ArrayList<Node> operands = (ArrayList<Node>) n.getOperands();
-            String[] operandsList = new String[operands.size() - 1];
-            for (int i = 1; i < operands.size(); i++) {
-                operandsList[i-1] = operands.get(i).toString();
-            }
-
-            if (!n.getTarget().getMethod().getParameters().isEmpty()) {
-                ArrayList<String> parNames = new ArrayList<String>();
-
-                // get method's parameter names;
-                for (VariableElement p : n.getTarget().getMethod().getParameters()) {
-                    if (!usedVars.contains(p.toString())) {
-                        usedVars.add(p.toString());
+                    // add annotated type of the variable to the context;
+                    String typeWithVarName = getAnnotationFromType(n.getTarget().getType().getAnnotationMirrors().get(0).toString(), var);
+                    if (!relativeValues.contains(typeWithVarName)) {
+                        relativeValues.add(typeWithVarName);
                     }
-                    parNames.add(p.toString());
 
-                    // add method's parameter type annotations to the context;
-                    if (!p.asType().getAnnotationMirrors().isEmpty()) {
-                        String parAnnoType = p.asType().getAnnotationMirrors().get(0).toString();
-                        parAnnoType = getAnnotationFromType(parAnnoType, p.toString());
-                        if (!relativeValues.contains(parAnnoType)) {
-                            relativeValues.add(parAnnoType);
-                        }
-
-                        // if annotation arguments are variables add them to the context;
-                        ArrayList<String> passedParamsAnnoArgs = new ArrayList<String>();
-                        getPassedArgs(parAnnoType, passedParamsAnnoArgs);
-                        if (!passedParamsAnnoArgs.isEmpty()) {
-                            for (String a : passedParamsAnnoArgs) {
-                                parseExprArg(a, relativeValues, usedVars);
-                            }
-                        }
-                    }
-                }
-
-                for (int i = 0; i < parNames.size(); i++) {
-                    String assertion = "(assert (= " + parNames.get(i) + " " + operandsList[i] + "))";
-                    if (!relativeValues.contains(assertion)) {
-                        relativeValues.add(assertion);
-                    }
-                    if (!isNumeric(operandsList[i]) && !usedVars.contains(operandsList[i])) {
-                        usedVars.add(operandsList[i]);
-                        if (atypeFactory.getChecker().getParentChecker().resultsForVar.containsKey(operandsList[i])) {
-                            for (String res : atypeFactory.getChecker().getParentChecker().resultsForVar.get(operandsList[i])) {
-                                if (!relativeValues.contains(res)) {
-                                    relativeValues.add(res);
-                                }
-                            }
+                    // if annotation arguments are variables add them to the context;
+                    ArrayList<String> passedAnnoArgs = new ArrayList<String>();
+                    getPassedArgs(typeWithVarName, passedAnnoArgs);
+                    if (!passedAnnoArgs.isEmpty()) {
+                        for (String a : passedAnnoArgs) {
+                            parseExprArg(a, relativeValues, usedVars);
                         }
                     }
                 }
             }
+
+            atypeFactory.getChecker().getParentChecker().fields.put(var, relativeValues);
+            atypeFactory.getChecker().getParentChecker().fieldsUsedVars.put(var, usedVars);
+            //System.out.println("MY TARGET :: " + removeThisFromString(n.getTarget().toString()));
         }
-
-        atypeFactory.getChecker().getParentChecker().resultsForVar.put(v, relativeValues);
-        atypeFactory.getChecker().getParentChecker().usedVarForVar.put(v, usedVars);
-
+        //System.out.println(n.getTarget().getType());
+        //System.out.println(atypeFactory.getChecker().getParentChecker().fields);
+        //System.out.println(atypeFactory.getChecker().getParentChecker().fieldsUsedVars);
         return result;
-    }
-
-@Override public TransferResult<LatticeValue, LatticeStore> visitClassName (ClassNameNode n, TransferInput<LatticeValue, LatticeStore> p) {
-    //TransferResult<LatticeValue, LatticeStore> result = super.visitClassName(n, p);
-    //System.out.println("!!!!!!!!!!!!!!!class");
-    if (n != null) {
-        this.className = n.toString();
-    //    System.out.println("class name is now :: " + this.className);
-    }
-    TransferResult<LatticeValue, LatticeStore> result = super.visitClassName(n, p);
-    return result;
-}
-
-@Override public TransferResult<LatticeValue, LatticeStore> visitReturn (ReturnNode n, TransferInput<LatticeValue, LatticeStore> p) {
-    //System.out.println("!!!!!!!!!!!!!!return");
-    if (n != null) {
-    //    System.out.println(n);
-    //    System.out.println(n.getTransitiveOperands());
-    //    System.out.println("return type::" + n.getType());
-    }
-    TransferResult<LatticeValue, LatticeStore> result = super.visitReturn(n, p);
-    return result;
-}
-
-@Override public TransferResult<LatticeValue, LatticeStore> visitMethodAccess (MethodAccessNode n, TransferInput<LatticeValue, LatticeStore> p) {
-    //System.out.println("!!!!!!!!!!!method access");
-    if (n != null) {
-    //    System.out.println(n);
-    //    System.out.println("class name :: " + this.className);
-
-    }
-    TransferResult<LatticeValue, LatticeStore> result = super.visitMethodAccess(n, p);
-    return result;
-}
-
-@Override public TransferResult<LatticeValue, LatticeStore> visitLocalVariable (LocalVariableNode n, TransferInput<LatticeValue, LatticeStore> p) {
-    //System.out.println("!!!!!!!!!!!local variable");
-    if (n != null) {
-        //System.out.println(n);
-        //System.out.println("type of the local var:: " + n.getType());
-        //System.out.println(n.getAssignmentContext());
-        if (n.getAssignmentContext() != null) {
-            //System.out.println(n.getAssignmentContext().getElementForType());
-            if (n.getAssignmentContext() instanceof AssignmentContext.MethodReturnContext && n.getType().toString().contains("int")) {
-                String el = n.getAssignmentContext().getElementForType().toString();
-                String methodName = el.substring(0 , el.indexOf("("));
-                atypeFactory.getChecker().getParentChecker().methodReturnVars.put(methodName, n.toString());
-                //System.out.println("return var:: " + n + " with type " + n.getType() + " in method " + methodName);
-                //System.out.println("????get block::" + n.getBlock());
-                //System.out.println("class name :: " + this.className);
-            }
-        }
-    }
-    //System.out.println("present method return vars:: " + atypeFactory.getChecker().getParentChecker().methodReturnVars);
-    TransferResult<LatticeValue, LatticeStore> result = super.visitLocalVariable(n, p);
-    return result;
-}
-
- //   @Override public TransferResult<LatticeValue, LatticeStore> visitClassDeclaration (ClassDeclarationNode n, TransferInput<LatticeValue, LatticeStore> p) {
- //       TransferResult<LatticeValue, LatticeStore> result = super.visitClassDeclaration(n, p);
- //       System.out.println("!!!!!!!!!!class declaration");
- //       if (n.getTree() != null) {
- //           //this.className = n.getTree().toString();
- //           System.out.println(this.className);
- //       }
- //       //TransferResult<LatticeValue, LatticeStore> result = super.visitClassDeclaration(n, p);
- //       return result;
- //   }
-
-    // private method to get the variable name without (this). modifier;
-    private String removeThisFromString (String in) {
-        String regex = "\\(this\\)\\.";
-        return in.replaceAll(regex, "");
     }
 
     private void checkExpression (Node n, ArrayList<String> knowledge, ArrayList<String> vars) {
 
         if (n instanceof IntegerLiteralNode) return;
 
-        if (n instanceof FieldAccessNode || n instanceof LocalVariableNode) {
+        if (n instanceof FieldAccessNode) { // || n instanceof LocalVariableNode) {
             String key = removeThisFromString(n.toString());
             if (!vars.contains(key)) {
                 vars.add(key);
             }
-            if (atypeFactory.getChecker().getParentChecker().usedVarForVar.containsKey(key)) {
-                for (String k : atypeFactory.getChecker().getParentChecker().usedVarForVar.get(key)) {
+            if (atypeFactory.getChecker().getParentChecker().fieldsUsedVars.containsKey(key)) {
+                for (String k : atypeFactory.getChecker().getParentChecker().fieldsUsedVars.get(key)) {
                     if (!vars.contains(k)) {
                         vars.add(k);
                     }
                 }
             }
-            if (atypeFactory.getChecker().getParentChecker().resultsForVar.containsKey(key)) {
-                for (String res : atypeFactory.getChecker().getParentChecker().resultsForVar.get(key)) {
+            if (atypeFactory.getChecker().getParentChecker().fields.containsKey(key)) {
+                for (String res : atypeFactory.getChecker().getParentChecker().fields.get(key)) {
                     if (!knowledge.contains(res)) {
                         knowledge.add(res);
                     }
@@ -357,20 +115,51 @@ public class LatticeTransfer extends InitializationTransfer<LatticeValue, Lattic
         }
     }
 
-    // get arguments passed to the type annotation;
-    private void getPassedArgs (String anno, ArrayList<String> passedArgs) {
-        if (anno.contains("\"")) {
-                String s = anno.substring(anno.indexOf("\"") + 1);
-                String rest = s.substring(s.indexOf("\"") + 1);
-                s = s.substring(0, s.indexOf("\""));
-                passedArgs.add(s);
-                getPassedArgs(rest, passedArgs);
-        }
-    }
-
     private String getAnnotationFromType (String type, String var) {
         String regex = atypeFactory.getChecker().getQualPackage() + ".";
         return type.replace(regex, "") + " " + var;
+    }
+
+    private void getPassedArgs (String anno, ArrayList<String> passedArgs) {
+        if (anno.contains("\"")) {
+            String s = anno.substring(anno.indexOf("\"") + 1);
+            String rest = s.substring(s.indexOf("\"") + 1);
+            s = s.substring(0, s.indexOf("\""));
+            passedArgs.add(s);
+            getPassedArgs(rest, passedArgs);
+        }
+    }
+
+    private void parseExprArg(String exprArg, ArrayList<String> knowledge, ArrayList<String> vars) {
+        String [] arArgs = exprArg.split(" ");
+        for (int i = 0; i < arArgs.length; i++) {
+            if (!isNumeric(arArgs[i]) && !isOperand(arArgs[i]))  {
+                if (!vars.contains(arArgs[i])) {
+                    vars.add(arArgs[i]);
+                }
+                if (atypeFactory.getChecker().getParentChecker().fieldsUsedVars.containsKey(arArgs[i])) {
+                    for (String k : atypeFactory.getChecker().getParentChecker().fieldsUsedVars.get(arArgs[i])) {
+                        if (!vars.contains(k)) {
+                            vars.add(k);
+                        }
+                    }
+                }
+                if (atypeFactory.getChecker().getParentChecker().fields.containsKey(arArgs[i])) {
+                    for (String res : atypeFactory.getChecker().getParentChecker().fields.get(arArgs[i])) {
+                        if (!knowledge.contains(res)) {
+                            knowledge.add(res);
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+
+    private String removeThisFromString (String in) {
+        String regex = "\\(this\\)\\.";
+        return in.replaceAll(regex, "");
     }
 
     private static boolean isNumeric(String str){
@@ -386,48 +175,75 @@ public class LatticeTransfer extends InitializationTransfer<LatticeValue, Lattic
         return false;
     }
 
-    private void parseExprArg(String exprArg, ArrayList<String> knowledge, ArrayList<String> vars) {
-        String [] arArgs = exprArg.split(" ");
-        for (int i = 0; i < arArgs.length; i++) {
-            if (!isNumeric(arArgs[i]) && !isOperand(arArgs[i]))  {
-                if (!vars.contains(arArgs[i])) {
-                    vars.add(arArgs[i]);
-                }
-                if (atypeFactory.getChecker().getParentChecker().usedVarForVar.containsKey(arArgs[i])) {
-                    for (String k : atypeFactory.getChecker().getParentChecker().usedVarForVar.get(arArgs[i])) {
-                        if (!vars.contains(k)) {
-                            vars.add(k);
-                        }
-                    }
-                }
-                if (atypeFactory.getChecker().getParentChecker().resultsForVar.containsKey(arArgs[i])) {
-                    for (String res : atypeFactory.getChecker().getParentChecker().resultsForVar.get(arArgs[i])) {
-                        if (!knowledge.contains(res)) {
-                            knowledge.add(res);
-                        }
-                    }
-                    return;
-                }
-            }
-        }
+    @Override
+    public TransferResult<LatticeValue, LatticeStore> visitVariableDeclaration(VariableDeclarationNode n, TransferInput<LatticeValue, LatticeStore> in) {
+        TransferResult<LatticeValue, LatticeStore> result = super.visitVariableDeclaration(n, in);
+        //System.out.println("VARIABLE DECLARATION IN TRANSFER :: " + n);
+        return result;
     }
 
-    private void addInfoToContext (String s, ArrayList<String> relativeValues, ArrayList<String> usedVars) {
-        if (atypeFactory.getChecker().getParentChecker().resultsForVar.containsKey(s)) {
-            if (!usedVars.contains(s)) {
-                usedVars.add(s);
-            }
-            for (String res : atypeFactory.getChecker().getParentChecker().resultsForVar.get((s))) {
-                if (!relativeValues.contains(res)) {
-                    relativeValues.add(res);
-                }
-            }
-            for (String sv : atypeFactory.getChecker().getParentChecker().usedVarForVar.get(s)) {
-                if (!usedVars.contains(sv)) {
-                    usedVars.add(sv);
-                }
-            }
-            //    usedVars.addAll(atypeFactory.getChecker().getParentChecker().usedVarForVar.get(s));
-        }
+    @Override
+    public TransferResult<LatticeValue, LatticeStore> visitImplicitThis(ImplicitThisNode n, TransferInput<LatticeValue, LatticeStore> in) {
+        TransferResult<LatticeValue, LatticeStore> result = super.visitImplicitThis(n, in);
+        //System.out.println("IMPLICIT THIS :: " + n);
+        return result;
     }
+
+    @Override
+    public TransferResult<LatticeValue, LatticeStore> visitExplicitThis(ExplicitThisNode n, TransferInput<LatticeValue, LatticeStore> in) {
+        TransferResult<LatticeValue, LatticeStore> result = super.visitExplicitThis(n, in);
+        //System.out.println("EXPLICIT THIS :: " + n);
+        return result;
+    }
+
+    @Override
+    public TransferResult<LatticeValue, LatticeStore> visitFieldAccess(FieldAccessNode n, TransferInput<LatticeValue, LatticeStore> p) {
+        TransferResult<LatticeValue, LatticeStore> result = super.visitFieldAccess(n, p);
+        //System.out.println("I'm in field access " + n.getTree());// + " " + n.getReceiver().getBlock());
+        if (n.getTree() instanceof JCTree.JCFieldAccess) {
+            JCTree.JCFieldAccess tree = (JCTree.JCFieldAccess) n.getTree();
+            //System.out.println("EXPRESSION :: " + tree.getExpression());
+            //System.out.println("SYMBOL :: " + tree.sym);
+            //System.out.println(tree.sym.owner);
+            //System.out.println("SYMBOL TYPE :: " + tree.sym.type);
+        }
+        //System.out.println(result.getRegularStore());
+        //System.out.println(result.getResultValue().getAnnotations());
+        return result;
+    }
+
+    @Override
+    public TransferResult<LatticeValue, LatticeStore> visitObjectCreation(ObjectCreationNode n, TransferInput<LatticeValue, LatticeStore> p) {
+        TransferResult<LatticeValue, LatticeStore> result = super.visitObjectCreation(n, p);
+        //System.out.println("OBJECT CREATION :: " + n);
+        if (n.getAssignmentContext() != null) {
+            //System.out.println("ASSIGNMENT CONTEXT :: " + n.getAssignmentContext().getContextTree());
+            if (n.getAssignmentContext().getContextTree() instanceof JCTree.JCAssign) {
+                //System.out.println("JCAssign");
+            }
+            if (n.getAssignmentContext().getContextTree() instanceof JCTree.JCVariableDecl) {
+                //System.out.println("VarDec");
+                JCTree.JCVariableDecl varDec = (JCTree.JCVariableDecl) n.getAssignmentContext().getContextTree();
+                //System.out.println("NAME :: " + varDec.name);
+            }
+        //    System.out.println(n.getAssignmentContext().getElementForType());
+        }
+        if (n.getTree() instanceof JCTree.JCNewClass) {
+            JCTree.JCNewClass tree = (JCTree.JCNewClass) n.getTree();
+            //System.out.println("CONSTRUCTOR :: " + tree.constructor.toString());
+            //System.out.println("JCNewClass :: " + tree.getIdentifier());
+        }
+        //System.out.println("OPERANDS OF OBJECT CREATION :: " + n.getOperands());
+        //System.out.println("REG STORE :: " + result.getRegularStore());
+        return result;
+    }
+
+    @Override
+    public TransferResult<LatticeValue, LatticeStore> visitMethodInvocation(
+            MethodInvocationNode n, TransferInput<LatticeValue, LatticeStore> in) {
+        TransferResult<LatticeValue, LatticeStore> result = super.visitMethodInvocation(n, in);
+        return result;
+    }
+
+
 }

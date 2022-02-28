@@ -1,0 +1,39 @@
+# This file is part of the Property Checker.
+# Copyright (c) 2021 -- present. Property Checker developers.
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# version 2 for more details.
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ident length1;
+
+annotation UnknownLength1() any :<==> "true" for "true";
+annotation BottomLength1() any :<==> "false" for "true";
+
+annotation Length1(int min, int max) smt_test.List
+    :<==> "§subject§.size >= §min§ && §subject§.size <= §max§"
+    for "§min§ >= 0 && §min§ <= §max§";
+
+relation Length1(a0, b0) <: Length1(a1, b1) :<==> "§a0§ >= §a1§ && §b0§ <= §b1§";
+
+relation Length1(a,b) <: UnknownLength1() :<==> "true";
+relation BottomLength1() <: Length1(a,b) :<==> "true";
+relation BottomLength1() <: UnknownLength1() :<==> "true";
+
+join Length1(a0, b0), Length1(a1, b1) := Length1("java.lang.Math.min(§a0§, §a1§)", "java.lang.Math.max(§b0§, §b1§)");
+
+# overlapping
+meet Length1(a0, b0), Length1(a1, b1)
+    := Length1("java.lang.Math.max(§a0§, §a1§)", "java.lang.Math.min(§b0§, §b1§)")
+    for "§b0§ >= §a1§ || §b1§ >= §a0§";
+    
+# non-overlapping
+meet Length1(a0, b0), Length1(a1, b1) := BottomLength1(); # "!(b0 >= a1 || b1 >= a0)" is implicit!
