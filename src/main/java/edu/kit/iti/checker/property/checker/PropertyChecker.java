@@ -55,6 +55,12 @@ public class PropertyChecker extends BaseTypeChecker {
     public HashMap<String, ArrayList<String>> fields = new HashMap<>();
     public HashMap<String, ArrayList<String>> fieldsUsedVars = new HashMap<>();
 
+    public HashMap<String, String> initializedObjects = new HashMap<>();
+    public HashMap<String, ArrayList<String>> constructorParams = new HashMap<>();
+    public HashMap<String, ArrayList<String>> fieldsInitializations = new HashMap<>();
+    public HashMap<String, ArrayList<String>> objectFields = new HashMap<>();
+    public HashMap<String, ArrayList<String>> objectFieldsVars = new HashMap<>();
+
     public HashMap<String, ArrayList<String>> typeAnnos = new HashMap<>();
     public HashMap<String, HashMap<String, ArrayList<String>>> methodParam = new HashMap<>();
 

@@ -43,7 +43,7 @@ public class LatticeTransfer extends InitializationTransfer<LatticeValue, Lattic
         ArrayList<String> usedVars = new ArrayList<String>();
         ArrayList<String> relativeValues = new ArrayList<String>();
         JCTree.JCVariableDecl varDec;
-        SMTStringPrinter printer = new SMTStringPrinter();
+        SMTStringPrinter printer = new SMTStringPrinter(atypeFactory.getChecker().getParentChecker());
 
         if (n.getTarget().toString().contains("(this).")) {
             String var = removeThisFromString(n.getTarget().toString());

@@ -86,6 +86,15 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
     @Override
     public Void visitReturn(ReturnTree node, Void p) {
         this.varName = node.getExpression().toString();
+
+        /////////////////////
+        if (enclMethodNameString().equals("<init>")) {
+            this.varName = enclClassNameString() + "_" + node.getExpression().toString();
+        } else {
+            this.varName = enclClassNameString() + enclMethodNameString() + "_" + node.getExpression().toString();
+        }
+        /////////////////////
+
         call(() -> super.visitReturn(node, p), () -> result.malTypedReturns.add(node));
         return null;
     }
@@ -99,8 +108,6 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
     @Override
     public Void visitNewClass(NewClassTree node, Void p) {
-        //System.out.println("NEW CLASS NODE " + node);
-        //System.out.println(node.getArguments());
         return super.visitNewClass(node, p);
     }
 
@@ -108,7 +115,6 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
     public Void visitVariable(VariableTree node, Void p) {
         addVarToContext(node);
         PropertyChecker checker = atypeFactory.getChecker().getParentChecker();
-        //System.out.println("IM HERE" + node);
         String typeWithVar;
         if (enclMethod == null || enclMethod.toString().equals("<init>")) {
             if (!node.getModifiers().getAnnotations().isEmpty()) {
@@ -124,7 +130,6 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                     }
                 }
             }
-                //System.out.println("ANNOTATIONA OF UNINITIALIZED VARS " + node.getModifiers().getAnnotations());
         }
 
         call(() -> super.visitVariable(node, p), () -> result.malTypedVars.add(node));
@@ -164,16 +169,24 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
         enclClass = prevEnclClass;
     }
 
+    String constructorIdent = null;
     @Override
     public Void visitMethod(MethodTree node, Void p) {
-        //System.out.println("THIS IS METHOD " + node.getName());
+
+        saveConstructorInfo(node);
+
         MethodTree prevEnclMethod = enclMethod;
         enclMethod = node;
 
+        if (enclMethodNameString().equals("<init>")) {
+            //constructorIdent = enclClassNameString() + enclMethod.getParameters().size();
+        } else
+
         if (!enclMethod.getParameters().isEmpty()) {
+
             HashMap<String, ArrayList<String>> parameterAnnos = new HashMap<>();
             for (VariableTree parameter : enclMethod.getParameters()) {
-                if (parameter.getType().toString().equals("int")) {
+                //if (parameter.getType().toString().equals("int")) {
                     String paramName = parameter.getName().toString();
                     parameterAnnos.put(paramName, new ArrayList<>());
                     if (!parameter.getModifiers().getAnnotations().isEmpty()) {
@@ -181,9 +194,12 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                             parameterAnnos.get(paramName).add(anno.toString());
                         }
                     }
-                }
+                //} //else if (!parameter.getModifiers().getAnnotations().isEmpty()) {
+
+                //}
             }
             getLatticeSubchecker().getParentChecker().methodParam.put(enclMethod.getName().toString(), parameterAnnos);
+            //System.out.println(getLatticeSubchecker().getParentChecker().methodParam);
         }
 
         ExecutableElement methodElement = TreeUtils.elementFromDeclaration(node);
@@ -201,6 +217,22 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
         enclMethod = prevEnclMethod;
 
         return null;
+    }
+
+    private void saveConstructorInfo (MethodTree node) {
+
+        if (node.getName().toString().equals("<init>")) {
+            String constructorName = enclClassNameString() + node.getParameters().size();
+            ArrayList<String> consParams = new ArrayList<>();
+
+            if (node.getParameters().size() > 0) {
+                for (VariableTree par : node.getParameters()) {
+                    String regex = enclClassNameString() + node.getName().toString() + "_" + par.getName();
+                    consParams.add(par.toString().replace(par.getName().toString(), regex));
+                }
+            }
+            atypeFactory.getChecker().getParentChecker().constructorParams.put(constructorName, consParams);
+        }
     }
 
     @Override
@@ -269,7 +301,20 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
                 final int idx = i;
                 this.varName = paramNames.get(i).toString();
+
+                /////////////////////
+                //if (enclMethodNameString().equals("<init>")) {
+                //    this.varName = enclClassNameString() + "_" + paramNames.get(i).toString();
+                //} else {
+                //    this.varName = enclClassNameString() + enclMethodNameString() + "_" + paramNames.get(i).toString();
+                //}
+                if (!enclMethodNameString().equals("<init>")) {
+                    this.varName = enclClassNameString() + this.methodName + "_" + paramNames.get(i).toString();
+                }
+                /////////////////////
+
                 this.currentArgValue = passedArgs.get(i).toString();
+                //System.out.println("HERE " + varName);
 
                 call(
                         () -> commonAssignmentCheck(requiredArgs.get(idx), passedArgs.get(idx), "argument.type.incompatible"), //$NON-NLS-1$
@@ -294,47 +339,148 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
     String methodName = "";
     boolean fielsAccess = false;
     String fieldName = "";
+    boolean objectInitialized = false;
+    boolean isInt = false;
     @Override
     protected void commonAssignmentCheck(Tree varTree, ExpressionTree valueExp, @CompilerMessageKey String errorKey, Object... extraArgs) {
-        //System.out.println("KIND OF VALUE EXPRESSION :: " + valueExp.getKind());
+
         if (varTree.getKind().name().equals("VARIABLE")) {
             JCTree.JCVariableDecl var = (JCTree.JCVariableDecl) varTree;
             this.varName = var.getName().toString();
+            /////////////////////
+            if (enclMethodNameString().equals("<init>")) {
+                this.varName = enclClassNameString() + "_" + var.getName().toString();
+            } else {
+                this.varName = enclClassNameString() + enclMethodNameString() + "_" + var.getName().toString();
+            }
+            /////////////////////
+            if (!var.getType().toString().equals("int")) {
+                isInt = false;
+                if (valueExp.getKind().name().equals("NEW_CLASS") || atypeFactory.getChecker().getParentChecker().initializedObjects.containsKey(varName)) {
+                    objectInitialized = true;
+                } else {
+                    objectInitialized = false;
+                }
+            } else {
+                isInt = true;
+                objectInitialized = false;
+            }
+            //System.out.println("===" + this.varName);
 
         } else if (varTree.getKind().name().equals("IDENTIFIER")){
             JCTree.JCIdent var = (JCTree.JCIdent) varTree;
             this.varName = var.getName().toString();
+            /////////////////////
+            if (enclMethodNameString().equals("<init>")) {
+                this.varName = enclClassNameString() + "_" + var.getName().toString();
+            } else {
+                this.varName = enclClassNameString() + enclMethodNameString() + "_" + var.getName().toString();
+            }
+            if (var.type.toString().equals("int")) {
+                isInt = true;
+            } else {
+                isInt = false;
+            }
+            //System.out.println("$$$" + this.varName);
+            /////////////////////
         } //else
          if (varTree.getKind().name().equals("MEMBER_SELECT")){
             JCTree.JCFieldAccess var = (JCTree.JCFieldAccess) varTree;
             this.varName = var.name.toString();
-        }
-        //System.out.println("VARNAME AND KIND" + varName + " " + varTree.getKind());
+             /////////////////////
+             if (enclMethodNameString().equals("<init>")) {
+                 this.varName = enclClassNameString() + "_" + var.name.toString();
+             } else {
+                 this.varName = enclClassNameString() + enclMethodNameString() + "_" + var.name.toString();
+             }
+             if (var.type.toString().equals("int")) {
+                 isInt = true;
+             } else {
+                 isInt = false;
+             }
 
-        //if (valueExp.getKind().name().equals("MEMBER_SELECT")) {
-            //System.out.println("VALUE EXPRESSION :: " + valueExp);
-        //    this.fielsAccess = true;
+             /////////////////////
+        }
+
+         if (valueExp.getKind().name().equals("NEW_CLASS")) {
+             //System.out.println("common assignment check new class " + varName + " " + varTree);
+             isInt = false;
+             //String v = enclClassNameString() + enclMethodNameString() + "_" + varName;
+             JCTree.JCVariableDecl var = (JCTree.JCVariableDecl) varTree;
+             atypeFactory.getChecker().getParentChecker().initializedObjects.put(varName, var.vartype.toString());
+             copyFieldsValues(atypeFactory.getChecker().getParentChecker().resultsForVar1, atypeFactory.getChecker().getParentChecker().objectFields, var);
+             copyFieldsValues(atypeFactory.getChecker().getParentChecker().usedVarForVar1, atypeFactory.getChecker().getParentChecker().objectFieldsVars, var);
+         }
+
+        if (valueExp.getKind().name().equals("MEMBER_SELECT")) {
+            this.fielsAccess = true;
         //    this.fieldName = valueExp.toString().substring(valueExp.toString().indexOf(".") + 1);
-            //System.out.println("FIELD NAME IS :: " + fieldName);
-        //} else {
-        //    this.fielsAccess = false;
+        } else {
+            this.fielsAccess = false;
         //    this.fieldName = "";
-        //}
+        }
 
         if (valueExp.getKind().name().equals("METHOD_INVOCATION")) {
 
-            //System.out.println("METHOD INVOCATION FOR :: " + varName);
             this.isMethodInvocation = true;
             this.methodName = valueExp.toString().substring(0, valueExp.toString().indexOf("("));
+            if (valueExp.toString().contains(".")) {
+                String k = valueExp.toString().substring(0, valueExp.toString().indexOf("."));
+                String objectName = enclClassNameString() + enclMethodNameString() + "_" + k;
+                String objectType = "";
+                //System.out.println(atypeFactory.getChecker().getParentChecker().initializedObjects);
+                if (atypeFactory.getChecker().getParentChecker().initializedObjects.containsKey(objectName)) {
+                    objectType = atypeFactory.getChecker().getParentChecker().initializedObjects.get(objectName);
+                    //System.out.println(atypeFactory.getChecker().getParentChecker().initializedObjects.get(objectName));
+                }
+                String toSearch = methodName.replace(k + ".", objectType);
+                //System.out.println("to search " + toSearch);
+                MethodInvocationTree mit = (MethodInvocationTree) valueExp;
+                JCTree.JCMethodInvocation jcmi = (JCTree.JCMethodInvocation) mit;
+                //System.out.println(jcmi.type.getAnnotationMirrors());
+                if (!jcmi.type.getAnnotationMirrors().isEmpty()) {
+                    for (AnnotationMirror am : jcmi.type.getAnnotationMirrors()) {
+                        //System.out.println("HERE " + am);
+                        ArrayList<String> pass = new ArrayList<>();
+                        getPassedArgs(am.toString(), pass);
+                        //System.out.println(pass);
+
+                    }
+                }
+                methodName = toSearch;
+            }
             addMethodInvToContext((MethodInvocationTree) valueExp);
         } else {
             this.isMethodInvocation = false;
             this.methodName = "";
         }
 
+        //System.out.println(varName + " " + valueExp.getKind().name());
         super.commonAssignmentCheck(varTree, valueExp, errorKey, extraArgs);
     }
 
+    private void copyFieldsValues(HashMap<String, ArrayList<String>> in, HashMap<String, ArrayList<String>> out, JCTree.JCVariableDecl var) {
+        for (Map.Entry<String, ArrayList<String>> entry : in.entrySet()) {
+            String identifier = null;
+            ArrayList<String> info = null;
+            String key = entry.getKey();
+            ArrayList<String> value = entry.getValue();
+            String regex = var.vartype + "_";
+            if (key.contains(regex)) {
+                identifier = key.replace(regex, varName + ".");
+                info = new ArrayList<>();
+                for (String s : value) {
+                    String anResult = s.replace(regex, varName + ".");
+                    info.add(anResult);
+                }
+            }
+            if (identifier != null && info != null) {
+                out.put(identifier, info);
+            }
+        }
+    }
+
+    boolean isNewClass = false;
     @Override
     protected void commonAssignmentCheck(
             AnnotatedTypeMirror varType,
@@ -344,53 +490,104 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
             Object... extraArgs) {
         commonAssignmentCheckStartDiagnostic(varType, valueType, valueTree);
 
+
+        if (valueTree.getClass().equals(JCTree.JCNewClass.class)) {
+            isNewClass = true;
+            //System.out.println("NEW CLASS");
+            JCTree.JCNewClass nc = (JCTree.JCNewClass) valueTree;
+            String id = nc.constructor.owner.toString().substring(nc.constructor.owner.toString().indexOf(".") + 1) + nc.args.size();
+            if (atypeFactory.getChecker().getParentChecker().fieldsInitializations.get(id) != null) {
+                for (String s : atypeFactory.getChecker().getParentChecker().fieldsInitializations.get(id)) {
+                    String s1 = s.replace(nc.constructor.owner.toString().substring(nc.constructor.owner.toString().indexOf(".") + 1) + "_", varName + ".");
+                    for (Map.Entry<String, ArrayList<String>> entry : atypeFactory.getChecker().getParentChecker().objectFields.entrySet()) {
+                        String key = entry.getKey();
+                        if (s1.contains(key)) {
+                            atypeFactory.getChecker().getParentChecker().objectFields.get(key).add(s1);
+                            if (nc.args.size() > 0) {
+                                ArrayList<String> consPars = atypeFactory.getChecker().getParentChecker().constructorParams.get(id);
+                                for (int i = 0; i < consPars.size(); i++) {
+                                    String[] array = consPars.get(i).split(" ");
+                                    if (s1.contains(array[array.length - 1])) {
+                                        //atypeFactory.getChecker().getParentChecker().objectFields.get(key).add(consPars.get(i));
+                                        atypeFactory.getChecker().getParentChecker().objectFieldsVars.get(key).add(array[array.length - 1]);
+                                        String init = "(assert (= " + array[array.length - 1] + " " + nc.args.get(i) + "))";
+                                        if (!isNumeric(nc.args.get(i).toString()))  {
+                                            String argName = enclClassNameString() + enclMethodNameString() + "_" + nc.args.get(i);
+                                            if (!atypeFactory.getChecker().getParentChecker().resultsForVar1.containsKey(argName)) {
+                                                argName = enclClassNameString() + "_" + nc.args.get(i);
+                                            }
+                                            init = "(assert (= " + array[array.length - 1] + " " + argName + "))";
+                                            atypeFactory.getChecker().getParentChecker().objectFieldsVars.get(key).add(argName);
+                                            //System.out.println("!!!!!!!!!" + atypeFactory.getChecker().getParentChecker().resultsForVar1.get(argName));
+                                            if (atypeFactory.getChecker().getParentChecker().objectFields.containsKey(key)) {
+                                                atypeFactory.getChecker().getParentChecker().objectFields.get(key).addAll(atypeFactory.getChecker().getParentChecker().resultsForVar1.get(argName));
+                                                atypeFactory.getChecker().getParentChecker().objectFieldsVars.get(key).addAll(atypeFactory.getChecker().getParentChecker().usedVarForVar1.get(argName));
+                                            }
+                                        }
+                                        atypeFactory.getChecker().getParentChecker().objectFields.get(key).add(init);
+                                        //System.out.println("RESULTS FOR " + varName + " " + atypeFactory.getChecker().getParentChecker().objectFields.get(key));
+                                    }
+                                }
+                            }
+                        }
+                        //System.out.println(atypeFactory.getChecker().getParentChecker().objectFields.get(key));
+                    }
+                }
+            }
+        } else {
+            isNewClass = false;
+        }
         AnnotatedTypeMirror widenedValueType = atypeFactory.getWidenedType(valueType, varType);
         PropertyAnnotation pa = getLatticeSubchecker().getTypeFactory().getLattice().getPropertyAnnotation(varType);
         PropertyChecker checker = getLatticeSubchecker().getParentChecker();
         boolean success = atypeFactory.getTypeHierarchy().isSubtype(widenedValueType, varType);
 
-        if (!success && valueTree instanceof LiteralTree) {
-            LiteralTree literal = (LiteralTree) valueTree;
-            EvaluatedPropertyAnnotation epa = getLatticeSubchecker().getTypeFactory().getLattice().getEvaluatedPropertyAnnotation(varType);
+        //if (isInt || objectInitialized) {
+            if (!success && valueTree instanceof LiteralTree) {
+                LiteralTree literal = (LiteralTree) valueTree;
+                EvaluatedPropertyAnnotation epa = getLatticeSubchecker().getTypeFactory().getLattice().getEvaluatedPropertyAnnotation(varType);
 
-            if (epa != null) {
-                PropertyAnnotationType pat = epa.getAnnotationType();
-                Class<?> literalClass = ClassUtils.literalKindToClass(literal.getKind());
-                if (literalClass != null && literalClass.equals(pat.getSubjectType())) {
-                    success = epa.checkProperty(literal.getValue());
-                } else if (literal.getKind() == Kind.NULL_LITERAL && !pat.getSubjectType().isPrimitive()) {
-                    success = epa.checkProperty(null);
+                if (epa != null) {
+                    PropertyAnnotationType pat = epa.getAnnotationType();
+                    Class<?> literalClass = ClassUtils.literalKindToClass(literal.getKind());
+                    if (literalClass != null && literalClass.equals(pat.getSubjectType())) {
+                        //System.out.println("florians stuff");
+                        success = epa.checkProperty(literal.getValue());
+                    } else if (literal.getKind() == Kind.NULL_LITERAL && !pat.getSubjectType().isPrimitive()) {
+                        //System.out.println("another florians stuff");
+                        success = epa.checkProperty(null);
+                    }
+
+
+                } else if (this.checkingMethodArgs) {
+                    //System.out.println("checking args and literal");
+                    //System.out.println("LITERAL " + varName + " " + currentArgValue);
+                    success = checkMethodArgs(checker, pa);
+
+                } else if (!isMethodInvocation) {
+                    //System.out.println("not method invocation and literal");
+                    addAnnoArgsToContext(pa.getActualParameters());
+                    success = SMTcheck(checker, pa);
+                }
+            } else if (!success) {
+                if (fielsAccess) {
+                    //System.out.println("not literal and field access");
+                    addAnnoArgsToContext(pa.getActualParameters());
+                    addFieldInfoToContext(fieldName, checker.resultsForVar1.get(varName), checker.usedVarForVar1.get(varName));
+                    success = SMTcheck(checker, pa);
+                } else if (this.checkingMethodArgs) {
+                    //System.out.println("not literal and checking args");
+                    //System.out.println("NOT LITERAL " + varName + " " + currentArgValue + " " + methodName);
+                    success = checkMethodArgs(checker, pa);
+                } else {
+                    //System.out.println("not literal, not fields access, not checking args");
+                    //System.out.println(pa.getActualParameters());
+                    addAnnoArgsToContext(pa.getActualParameters());
+                    success = SMTcheck(checker, pa);
                 }
 
-            } else if (this.checkingMethodArgs) {
-                //System.out.println("PROPERTY ANNOTATION :: " + pa);
-                success = checkMethodArgs(checker, pa);
-
-            } else if (!isMethodInvocation) {
-                addAnnoArgsToContext(pa.getActualParameters());
-                success = SMTcheck(checker, pa);
             }
-        } else if (!success){
-        //    if (fielsAccess) {
-        //        System.out.println("!!!!!!!!!!!! FIELD NAME " + fieldName);
-        //        addAnnoArgsToContext(pa.getActualParameters());
-        //        String variable = getNameToLookUp();
-        //        System.out.println("!!!!!!!!! VAR NAME " + variable);
-        //        addFieldInfoToContext(fieldName, checker.resultsForVar1.get(variable), checker.usedVarForVar1.get(variable));
-        //        System.out.println(checker.resultsForVar1.get(variable));
-        //        System.out.println(checker.usedVarForVar1.get(variable));
-        //        success = SMTcheck(checker, pa);
-        //    } else
-                if (this.checkingMethodArgs) {
-                success = checkMethodArgs(checker, pa);
-            } else {
-                //System.out.println("PROPERTY ANNOTATION HERE :: " + pa);
-                //System.out.println("VARIABLE :: " + varName);
-                addAnnoArgsToContext(pa.getActualParameters());
-                success = SMTcheck(checker, pa);
-            }
-
-        }
+       // }
         commonAssignmentCheckEndDiagnostic(success, null, varType, valueType, valueTree);
 
         if (!success) {
@@ -415,6 +612,7 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
     @Override
     protected void checkConstructorResult(
             AnnotatedExecutableType constructorType, ExecutableElement constructorElement) {
+        //System.out.println("CONSTRUCTOR " + constructorElement + " " + constructorType);
         QualifierHierarchy qualifierHierarchy = atypeFactory.getQualifierHierarchy();
         Set<AnnotationMirror> constructorAnnotations =
                 constructorType.getReturnType().getAnnotations();
@@ -422,6 +620,9 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
         AnnotationMirror constructorAnno =
                 qualifierHierarchy.findAnnotationInHierarchy(constructorAnnotations, top);
+        //System.out.println("CONSTRUCTOR ANNO " + constructorAnno);
+        //System.out.println("TOP " + top);
+        //System.out.println("COND FOR ERROR " + qualifierHierarchy.isSubtype(top, constructorAnno));
         if (!qualifierHierarchy.isSubtype(top, constructorAnno)) {
             // Report an error instead of a warning.
             checker.reportError(
@@ -464,32 +665,35 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
         if (checker.resultsForVar1.containsKey(nameToLookup)) {
 
             try (BufferedWriter outS = new BufferedWriter(new FileWriter(file))) {
-                SMTFilePrinter printer = new SMTFilePrinter(outS, checker, varName);
+                SMTFilePrinter printer = new SMTFilePrinter(outS, checker, varName, enclClassNameString(), enclMethodNameString(), this.methodName, this.checkingMethodArgs, this.fielsAccess, this.isNewClass);
+                catchFields(pa.getAnnotationType().getProperty());
+
                 if (checker.usedVarForVar1.containsKey(nameToLookup)) {
                     ArrayList<String> varDecs = checker.usedVarForVar1.get(nameToLookup);
                     for (String v : varDecs) {
-                        v = v.substring(v.indexOf("_") + 1);
+                        //////////////////
+                        //v = v.substring(v.indexOf("_") + 1);
+                        /////////////////
                         printer.print("(declare-const " + v + " Int)");
                         printer.println();
                     }
                 }
-                //System.out.println("PROPERTY FROM SMT " + pa.getAnnotationType().getProperty());
-                String f = checkForField(pa.getAnnotationType().getProperty(), varName);
-                if (f != null) {
-                    printer.print("(declare-const " + f + " Int)");
-                    printer.println();
-                    String field = f.substring(f.indexOf(".") + 1);
-                    if (checker.fields.containsKey(field)) {
-                        for (String r : checker.fields.get(field)) {
-                            String info = r.replace(field, f);
-                            checker.resultsForVar1.get(nameToLookup).add(info);
-                        }
-                    }
-                    //System.out.println("==========================" + checker.fields.get(field));
-                }
+            //    String f = checkForField(pa.getAnnotationType().getProperty(), varName);
+            //    if (f != null) {
+            //        printer.print("(declare-const " + f + " Int)");
+            //        printer.println();
+            //        String field = f.substring(f.indexOf(".") + 1);
+            //        if (checker.fields.containsKey(field)) {
+            //            for (String r : checker.fields.get(field)) {
+            //                String info = r.replace(field, f);
+            //                checker.resultsForVar1.get(nameToLookup).add(info);
+            //            }
+            //        }
+            //    }
                 printer.print("(declare-const " + varName + " Int)");
                 printer.println();
                 ArrayList<String> results = checker.resultsForVar1.get(nameToLookup);
+                //System.out.println("RESULTS TO PRINT " + nameToLookup + " " + checker.resultsForVar1.get(nameToLookup));
                 for (String r : results) {
                     printer.printLine(r);
                 }
@@ -498,6 +702,29 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
             } catch (IOException e) {
                 e.printStackTrace();
+            }
+        }
+    }
+
+    private void catchFields (String prop) {
+        PropertyChecker checker = atypeFactory.getChecker().getParentChecker();
+        String[] splitted = prop.split(" ");
+        for (int i = 0; i < splitted.length; i++) {
+            if (splitted[i].contains("§subject§.")) {
+                String field = splitted[i].replace("§subject§", varName);
+                if (checker.objectFields.containsKey(field)) {
+                    checker.resultsForVar1.get(varName).addAll(checker.objectFields.get(field));
+                }
+                if (!checker.usedVarForVar1.get(varName).contains(field)) {
+                    checker.usedVarForVar1.get(varName).add(field);
+                }
+                if (checker.objectFieldsVars.containsKey(field)) {
+                    for (String f : checker.objectFieldsVars.get(field)) {
+                        if (!checker.usedVarForVar1.get(varName).contains(f)) {
+                            checker.usedVarForVar1.get(varName).add(f);
+                        }
+                    }
+                }
             }
         }
     }
@@ -526,8 +753,10 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
             line = brCleanUp.readLine();
             //System.out.println(varName);
-            System.out.println(smtName);
-            System.out.println("[Stdout] " + line);
+            if (line != null && (line.equals("unsat"))) { //|| line.equals("sat"))) {
+                System.out.println(smtName);
+                System.out.println("[Stdout] " + line);
+            }
             if (line != null) {
                 if (line.equals("unsat")) success = true;
             }
@@ -573,10 +802,16 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
     int count = 0;
     private String getSMTFileName (String varName) {
+        //System.out.println("GETTING THE SMT FILE NAME FOR " + varName);
         String smtName = getEnclClassName().toString() + varName + "_" + count + ".smt";
         if (enclMethod != null) {
             smtName = getEnclClassName().toString() + getEnclMethodNameName().toString() + varName + "_" + count + ".smt";
         }
+
+        ///////////////////////////
+        smtName = varName + "_" + count + ".smt";
+        ///////////////////////////
+
         count++;
         return smtName;
     }
@@ -589,27 +824,26 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
     }
 
     private void parseExprArg1(String exprArg, ArrayList<String> knowledge, ArrayList<String> vars) {
-        String [] arArgs = exprArg.split(" ");
-        for (int i = 0; i < arArgs.length; i++) {
-            if (!isNumeric(arArgs[i]) && !isOperand(arArgs[i]))  {
-                String argName = "";
-                if (enclMethod != null) {
-                    argName = enclClassNameString() + enclMethodNameString() + "_" + arArgs[i];
-                    if (!atypeFactory.getChecker().getParentChecker().usedVarForVar1.containsKey(argName)) {
+        if (knowledge != null && vars != null) {
+            String[] arArgs = exprArg.split(" ");
+            for (int i = 0; i < arArgs.length; i++) {
+                if (!isNumeric(arArgs[i]) && !isOperand(arArgs[i])) {
+                    String argName = "";
+                    if (enclMethod != null) {
+                        argName = enclClassNameString() + enclMethodNameString() + "_" + arArgs[i];
+                        if (!atypeFactory.getChecker().getParentChecker().usedVarForVar1.containsKey(argName)) {
+                            argName = enclClassNameString() + "_" + arArgs[i];
+                        }
+                    } else {
                         argName = enclClassNameString() + "_" + arArgs[i];
                     }
-                } else {
-                    argName = enclClassNameString() + "_" + arArgs[i];
-                }
 
-                if (!vars.contains(argName)) {
-                    vars.add(argName);
+                    if (!vars.contains(argName)) {
+                        vars.add(argName);
+                    }
+                    addInfoToLocalContext(argName, atypeFactory.getChecker().getParentChecker().usedVarForVar1, vars);
+                    addInfoToLocalContext(argName, atypeFactory.getChecker().getParentChecker().resultsForVar1, knowledge);
                 }
-                //System.out.println("I'M ADDING " + argName);
-                //System.out.println(atypeFactory.getChecker().getParentChecker().resultsForVar1.get(argName));
-                //System.out.println(atypeFactory.getChecker().getParentChecker().usedVarForVar1.get(argName));
-                addInfoToLocalContext(argName, atypeFactory.getChecker().getParentChecker().usedVarForVar1, vars);
-                addInfoToLocalContext(argName, atypeFactory.getChecker().getParentChecker().resultsForVar1, knowledge);
             }
         }
         return;
@@ -621,6 +855,7 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                 usedVars.add(s);
             }
         }
+        //System.out.println("ADD INFO TO CONTEXT");
         addInfoToLocalContext(s, atypeFactory.getChecker().getParentChecker().resultsForVar1, relativeValues);
         addInfoToLocalContext(s, atypeFactory.getChecker().getParentChecker().usedVarForVar1, usedVars);
     }
@@ -630,38 +865,102 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
             PropertyChecker checker = atypeFactory.getChecker().getParentChecker();
             for (String a : annoArgs) {
                 String nameToLookup = getNameToLookUp();
-            //    System.out.println("NAME TO LOOK UP :: " + nameToLookup);
                 parseExprArg1(a, checker.resultsForVar1.get(nameToLookup), checker.usedVarForVar1.get(nameToLookup));
             }
         }
     }
 
+    @Override
+    public Void visitMethodInvocation (MethodInvocationTree node, Void p) {
+        //System.out.println("VISITING METHOD INVOCATION " + node.getMethodSelect());
+        //if (node.getMethodSelect().toString().equals("super()")) {
+        //    this.methodName = node.getMethodSelect().toString();
+        //} else {
+        //    this.methodName = "";
+        //}
+        return super.visitMethodInvocation(node, p);
+    }
+
     private boolean checkMethodArgs (PropertyChecker checker, PropertyAnnotation pa) {
 
         String v = enclClassNameString() + this.methodName + "_" + varName;
+
+        /////////////////////////////
+        v = enclClassNameString() + this.methodName + "_" + varName.substring(varName.indexOf("_") + 1);
+        //System.out.println("IN CHECKING METHOD ARGS " + v);
+        //System.out.println(pa.getAnnotationType().getProperty());
+        //System.out.println(pa.getActualParameters());
+        //////////////////////////////////////
+
         ArrayList<String> tempRelativeValues = new ArrayList<String>();
         ArrayList<String> tempUsedVars = new ArrayList<String>();
 
         //WARNINGS about Object
+        boolean isAbsent = false;
         if (checker.resultsForVar1.get(v) != null) {
+            isAbsent = false;
             tempRelativeValues.addAll(checker.resultsForVar1.get(v));
             tempUsedVars.addAll(checker.usedVarForVar1.get(v));
+        } else {
+            isAbsent = true;
+            checker.resultsForVar1.put(v, new ArrayList<String>());
+            checker.usedVarForVar1.put(v, new ArrayList<String>());
         }
+        //System.out.println(checker.resultsForVar1);
 
-        checker.resultsForVar1.get(v).add("(assert (= " + varName + " " + currentArgValue + "))");
+        //String curArgValWithPath = currentArgValue;
+        ////////////////////////
+        //if (!isInt) {
+        //    System.out.println(this.varName);
+        //}
+
+
+
+
+        //checker.resultsForVar1.get(v).add("(assert (= " + varName + " " + currentArgValue + "))");
         if (!isNumeric(currentArgValue)) {
+            //System.out.println("CURRENT ARG VALUE IS NOT NUMERIC " + currentArgValue);
             String cav = enclClassNameString() + enclMethodNameString() + "_" + currentArgValue;
             if (!checker.resultsForVar1.containsKey(cav)) {
                 cav = enclClassNameString() + "_" + currentArgValue;
             }
+            //System.out.println("cav :: " + cav);
+            for (Map.Entry<String, ArrayList<String>> entry : checker.objectFields.entrySet()) {
+                String key = entry.getKey();
+                //System.out.println(key);
+                if (key.contains(cav)) {
+                    if (!checker.usedVarForVar1.get(v).contains(key)) {
+                        checker.usedVarForVar1.get(v).add(key);
+                    }
+                    String field = key.replace(cav, v);
+                    if (!checker.usedVarForVar1.get(v).contains(field)) {
+                        checker.usedVarForVar1.get(v).add(field);
+                    }
+                    checker.resultsForVar1.get(v).add("(assert (= " + field + " " + key + "))");
+                    //System.out.println(key);
+                }
+            }
+            //System.out.println(checker.initializedObjects.get(cav));
+
+
+
+            //System.out.println(cav);
+            checker.resultsForVar1.get(v).add("(assert (= " + varName + " " + cav + "))");
             addInfoToContext(cav, checker.resultsForVar1.get(v), checker.usedVarForVar1.get(v));
+            //System.out.println(checker.resultsForVar1.get(v));
+        } else {
+            checker.resultsForVar1.get(v).add("(assert (= " + varName + " " + currentArgValue + "))");
         }
 
+        //System.out.println("HERE");
         boolean success = SMTcheck(checker, pa);
 
-        if (!tempRelativeValues.isEmpty() && !tempUsedVars.isEmpty()) {
+        if (!tempRelativeValues.isEmpty() && !tempUsedVars.isEmpty() && !isAbsent) {
             checker.resultsForVar1.put(v, tempRelativeValues);
             checker.usedVarForVar1.put(v, tempUsedVars);
+        } else if (isAbsent) {
+            checker.resultsForVar1.remove(v);
+            checker.usedVarForVar1.remove(v);
         }
 
         return success;
@@ -719,25 +1018,43 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
         PropertyChecker checker = getLatticeSubchecker().getParentChecker();
         // I don't know what happens with varName, so I set it here
         varName = node.getName().toString();
-        //System.out.println("%%%%%%%%%%% " + varName + " " + node.getInitializer());
+
+        /////////////////////
+        if (enclMethodNameString().equals("<init>")) {
+            this.varName = enclClassNameString() + "_" + node.getName().toString();
+            //constructorIdent = enclClassNameString() + enclMethod.getParameters().size();
+        } else {
+            this.varName = enclClassNameString() + enclMethodNameString() + "_" + node.getName().toString();
+            //constructorIdent = null;
+        }
+
+        /////////////////////
+
+
         if (node.getType().toString().equals("int")) {
             String var = enclClassNameString() + enclMethodNameString() + "_" + node.getName().toString();
             ArrayList<String> usedVars = new ArrayList<String>();
             ArrayList<String> relativeValues = new ArrayList<String>();
             JCTree.JCVariableDecl varDec = (JCTree.JCVariableDecl) node;
-            SMTStringPrinter printer = new SMTStringPrinter();
+            String varFieldInit = null;
+            SMTStringPrinter printer = new SMTStringPrinter(enclClassNameString(), enclMethodNameString(), this.methodName, this.checkingMethodArgs, checker);
             if (node.getInitializer() instanceof MethodInvocationTree) {
                 varMethodInvocation = var;
                 return;
             }
             if (node.getInitializer() != null && node.getInitializer().getClass().equals(JCTree.JCFieldAccess.class)) {
-                fieldName = node.getInitializer().toString().substring(node.getInitializer().toString().indexOf(".") + 1);
-                //System.out.println("VAR NAME HERE IS "+ varName);
-                //System.out.println("FIELDNAME HERE IS " + fieldName);
-                //System.out.println(node.getInitializer().getClass());
+                if (enclMethodNameString().equals("<init>")) {
+                    fieldName = enclClassNameString() + "_" + node.getInitializer().toString();
+                } else {
+                    fieldName = enclClassNameString() + enclMethodNameString() + "_" + node.getInitializer().toString();
+                }
+
+
                 relativeValues.add("(assert (= " + varName + " " + fieldName + "))");
-                //System.out.println(checker.fields);
-                if (checker.fields.containsKey(fieldName)) {
+                //varFieldInit = "(assert (= " + varName + " " + fieldName + "))";
+
+
+                if (checker.objectFields.containsKey(fieldName)) {
                     usedVars.add(fieldName);
                     addFieldInfoToContext(fieldName, relativeValues, usedVars);
                 }
@@ -747,6 +1064,10 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                 }
                 checkExpression((JCTree.JCExpression) node.getInitializer(), relativeValues, usedVars);
             }
+
+            //if (varFieldInit != null) {
+            //    relativeValues.add(varFieldInit);
+            //}
 
             if (!varDec.mods.annotations.isEmpty()) {
                 checker.typeAnnos.put(var, new ArrayList<>());
@@ -781,11 +1102,12 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
             checker.resultsForVar1.put(var, relativeValues);
             checker.usedVarForVar1.put(var, usedVars);
-        //    System.out.println(checker.resultsForVar1.get(var));
-        //    System.out.println(checker.usedVarForVar1.get(var));
+
+            if (node.getInitializer() != null && node.getInitializer().getClass().equals(JCTree.JCFieldAccess.class)) {
+
+            }
         } else {
             if (!node.getModifiers().getAnnotations().isEmpty()) {
-                //System.out.println("NOT INT TYPE" + node.toString());
                 boolean hasIntArguments = false;
                 ArrayList<String> paramNames = new ArrayList<String>();
                 for (AnnotationTree annotTree : node.getModifiers().getAnnotations()) {
@@ -793,7 +1115,6 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
                     if (atypeFactory.getChecker().getTypeFactory().getLattice().getAnnotationTypes().containsKey(annotationType)) {
                         PropertyAnnotationType pat = atypeFactory.getChecker().getTypeFactory().getLattice().getAnnotationTypes().get(annotationType);
-                        //System.out.println(pat);
                         for (PropertyAnnotationType.Parameter p : pat.getParameters()) {
                             //.println("PAT PARAMETER " + p.getName() + " " + p.getType());
                             if (p.getType().toString().equals("int")) hasIntArguments = true;
@@ -804,13 +1125,20 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                         ArrayList<String> usedVars = new ArrayList<String>();
                         ArrayList<String> relativeValues = new ArrayList<String>();
                         varName = node.getName().toString();
+
+                        /////////////////////
+                        if (enclMethodNameString().equals("<init>")) {
+                            this.varName = enclClassNameString() + "_" + node.getName().toString();
+                        } else {
+                            this.varName = enclClassNameString() + enclMethodNameString() + "_" + node.getName().toString();
+                        }
+                        /////////////////////
+
                         String var = enclClassNameString() + enclMethodNameString() + "_" + node.getName().toString();
                         JCTree.JCVariableDecl varDec = (JCTree.JCVariableDecl) node;
-
                         String typeWithVarName = "";
                         List<JCTree.JCAnnotation> l = varDec.mods.annotations;
                         for (JCTree.JCAnnotation a : l) {
-                            //System.out.println("THIS IS AN ANNOTATION TYPE " + a);
                             if (a.toString().contains(annotTree.getAnnotationType().toString())) {
                                 typeWithVarName = a.toString() + " " + varDec.name.toString();
                             }
@@ -820,7 +1148,6 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                         getPassedArgs(typeWithVarName, passedAnnoArgs);
                         if (!passedAnnoArgs.isEmpty()) {
                             for (String a : passedAnnoArgs) {
-                                //System.out.println("PASSED ARGUMENT FOR THE ANNOTATION IS " + a);
                                 String[] ar = a.split(" ");
                                 for (String s : ar) {
 
@@ -833,39 +1160,112 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                                             }
 
                                         }
-                                        //.println("NOT NUMERIC AND NOT OPERAND " + s1);
-                                        //System.out.println(checker.resultsForVar1.get(s1));
-                                        //System.out.println(checker.fields.get(s1));
                                         addInfoToContext(s1, relativeValues, usedVars);
                                     }
                                 }
                             }
                         }
+                        //for (Map.Entry<String, ArrayList<String>> entry : checker.objectFields.entrySet()) {
+                        //    String key = entry.getKey();
+                        //    if (key.contains(var)) {
+                        //        relativeValues.addAll(checker.objectFields.get(key));
+                        //        usedVars.addAll(checker.objectFieldsVars.get(key));
+                        //    }
+                        //}
+
                         checker.resultsForVar1.put(var, relativeValues);
                         checker.usedVarForVar1.put(var, usedVars);
-                        //System.out.println("!!!!!!!!!!!" + checker.resultsForVar1.get(var));
-                        //System.out.println("!!!!!!!!!!!" + checker.usedVarForVar1.get(var));
                     }
                 }
 
                 //List<AnnotationTree> annoTree = (List<AnnotationTree>) node.getModifiers().getAnnotations();
-                //System.out.println(node.getModifiers().getAnnotations());
             }
         }
     }
 
+    private void saveConstructorAssignments (String varIdent, JCTree.JCAssign node) {
+        ArrayList<String> relativeValues = new ArrayList<>();
+        JCTree.JCExpression right = node.rhs;
+        String value = expToString(right);
+        String toAdd = "(assert (= " + varIdent + " " + value + "))";
+        relativeValues.add(toAdd);
+        if (!atypeFactory.getChecker().getParentChecker().fieldsInitializations.containsKey(constructorIdent)) {
+            atypeFactory.getChecker().getParentChecker().fieldsInitializations.put(constructorIdent, relativeValues);
+        } else {
+            if (!atypeFactory.getChecker().getParentChecker().fieldsInitializations.get(constructorIdent).contains(toAdd)) {
+                atypeFactory.getChecker().getParentChecker().fieldsInitializations.get(constructorIdent).add(toAdd);
+            }
+        }
+    }
+
+    private String tagToOp(JCTree.Tag tag) {
+        String smt = "";
+        switch (tag) {
+            case MINUS: smt = "-";
+                break;
+            case PLUS: smt = "+";
+                break;
+            case MUL: smt = "*";
+                break;
+            case DIV: smt = "div";
+                break;
+            case MOD: smt = "mod";
+                break;
+            default: break;
+        }
+        return smt;
+    }
+
+    private String expToString (JCTree.JCExpression exp) {
+        String smt = "";
+        if (exp instanceof LiteralTree) {
+            smt = exp.toString();
+        } else if (exp instanceof BinaryTree) {
+            JCTree.JCBinary tree = (JCTree.JCBinary) exp;
+            smt = "(" + tagToOp(exp.getTag()) + " " + expToString(tree.lhs) + " " + expToString(tree.rhs) + ")";
+        } else {
+            smt = enclClassNameString() + enclMethodNameString() + "_" + exp.toString();
+        }
+        return smt;
+    }
+
     private void addAssignToContext(AssignmentTree node) {
+
+        if (enclMethodNameString().equals("<init>")) {
+            constructorIdent = enclClassNameString() + enclMethod.getParameters().size();
+            String varIdent = enclClassNameString() + "_" + node.getVariable().toString().replace("this.", "");
+            if (atypeFactory.getChecker().getParentChecker().resultsForVar1.containsKey(varIdent)) {
+                saveConstructorAssignments(varIdent, (JCTree.JCAssign) node);
+            }
+        } else {
+            constructorIdent = null;
+        }
+
+
         PropertyChecker checker = getLatticeSubchecker().getParentChecker();
         String var = enclClassNameString() + enclMethodNameString() + "_" + node.getVariable().toString();
         ArrayList<String> usedVars = new ArrayList<String>();
         ArrayList<String> relativeValues = new ArrayList<String>();
         JCTree.JCAssign varAssign = (JCTree.JCAssign) node;
-        SMTStringPrinter printer = new SMTStringPrinter();
+        SMTStringPrinter printer = new SMTStringPrinter(enclClassNameString(), enclMethodNameString(), this.methodName, this.checkingMethodArgs, checker);
+        if (node.getExpression() != null && node.getExpression().getClass().equals(JCTree.JCFieldAccess.class)) {
+            if (enclMethodNameString().equals("<init>")) {
+                fieldName = enclClassNameString() + "_" + node.getExpression().toString();
+            } else {
+                fieldName = enclClassNameString() + enclMethodNameString() + "_" + node.getExpression().toString();
+            }
+            relativeValues.add("(assert (= " + var + " " + fieldName + "))");
+            if (checker.objectFields.containsKey(fieldName)) {
+                usedVars.add(fieldName);
+                addFieldInfoToContext(fieldName, relativeValues, usedVars);
+            }
+        } else
+
         if (node.getExpression() instanceof MethodInvocationTree) {
             varMethodInvocation = var;
             return;
         }
-        if (varAssign != null) {
+        else {
             relativeValues.add(printer.printVarAssign(varAssign));
         }
         checkExpression((JCTree.JCExpression) node.getExpression(), relativeValues, usedVars);
@@ -893,6 +1293,9 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
 
         if (this.varName != null && !this.varName.equals("")) {
             String var = enclClassNameString() + enclMethodNameString() + "_" + this.varName;
+            //////////////////
+            var = this.varName;
+            /////////////////
             if (!tree.type.getAnnotationMirrors().isEmpty()) {
                 for (AnnotationMirror am : tree.type.getAnnotationMirrors()) {
                     String tempVarType = getAnnotationFromType(am.toString(), this.varName) + "TEMP";
@@ -908,6 +1311,35 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
                                     String s1 = enclClassNameString() + tree.meth.toString() + "_" + s;
                                     if (!atypeFactory.getChecker().getParentChecker().resultsForVar1.containsKey(s1)) {
                                         s1 = enclClassNameString() + "_" + s;
+                                    }
+                                    if (tree.meth.toString().contains(".")) {
+                                        //System.out.println("YAY " + tree.meth);
+                                        //s1 = methodName + "_" + s;
+                                        //if (!atypeFactory.getChecker().getParentChecker().resultsForVar1.containsKey(s1)) {
+                                            String obj = enclClassNameString() + enclMethodNameString() + "_" + tree.meth.toString().substring(0, tree.meth.toString().indexOf("."));
+                                        //    String clName = "";
+                                        //    if (atypeFactory.getChecker().getParentChecker().initializedObjects.containsKey(obj)) {
+                                        //        clName = atypeFactory.getChecker().getParentChecker().initializedObjects.get(obj);
+                                        //    }
+                                        //    s1 = clName + "_" + s;
+                                        //    System.out.println("PPPPPPPPPPPPPPPPPPPP" + s1);
+
+                                        //}
+                                        for (Map.Entry<String, ArrayList<String>> entry : atypeFactory.getChecker().getParentChecker().objectFields.entrySet()) {
+                                            String key = entry.getKey();
+                                            if (key.contains(obj) && key.contains(s)) {
+                                                //System.out.println("YAY " + atypeFactory.getChecker().getParentChecker().objectFields.get(key));
+                                                if (!usedVars.contains(key)) {
+                                                    usedVars.add(key);
+                                                }
+                                                for (String res : atypeFactory.getChecker().getParentChecker().objectFields.get(key)) {
+                                                    if (!relativeValues.contains(res)) {
+                                                        relativeValues.add(res);
+                                                    }
+                                                }
+                                            }
+                                        }
+
                                     }
 
                                     addInfoToContext(s1, relativeValues, usedVars);
@@ -926,11 +1358,14 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
         String nameToLookup = "";
         if (this.checkingMethodArgs) {
             nameToLookup = enclClassNameString() + this.methodName + "_" + varName;
+            nameToLookup = enclClassNameString() + this.methodName + "_" + varName.substring(varName.indexOf("_") + 1);
         } else {
             if (enclMethod != null && !enclMethodNameString().equals("<init>")) {
                 nameToLookup = enclClassNameString() + enclMethodNameString() + "_" + varName;
+                nameToLookup = enclClassNameString() + enclMethodNameString() + "_" + varName.substring(varName.indexOf("_") + 1);
             } else {
                 nameToLookup = enclClassNameString() + "_" + varName;
+                nameToLookup = enclClassNameString() + "_" + varName.substring(varName.indexOf("_") + 1);
             }
         }
         return nameToLookup;
@@ -947,8 +1382,8 @@ public class LatticeVisitor extends InitializationVisitor<LatticeAnnotatedTypeFa
     }
 
     private void addFieldInfoToContext (String field, ArrayList<String> knowledge, ArrayList<String> vars) {
-        addInfoToLocalContext(field, atypeFactory.getChecker().getParentChecker().fields, knowledge);
-        addInfoToLocalContext(field, atypeFactory.getChecker().getParentChecker().fieldsUsedVars, vars);
+        addInfoToLocalContext(field, atypeFactory.getChecker().getParentChecker().objectFields, knowledge);
+        addInfoToLocalContext(field, atypeFactory.getChecker().getParentChecker().objectFieldsVars, vars);
     }
 
     private void addInfoToGlobalContext (HashMap<String, ArrayList<String>> global, ArrayList<String> local, String var) {

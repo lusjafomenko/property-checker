@@ -1,18 +1,51 @@
 package edu.kit.iti.checker.property.printer;
 
 import com.sun.tools.javac.tree.JCTree;
+import edu.kit.iti.checker.property.checker.PropertyChecker;
 
 public class SMTStringPrinter {
 
+    String enclClassName;
+    String enclMethodName;
+    String invokedMethod;
+    boolean checkingMethodArgs;
+    PropertyChecker checker;
 
-    public SMTStringPrinter() {
+    public SMTStringPrinter(String enclClassName, String enclMethodName, String invokedMethod, boolean checkingMethodArgs, PropertyChecker checker) {
+        this.checker = checker;
+        this.enclClassName = enclClassName;
+        this.enclMethodName = enclMethodName;
+        this.invokedMethod = invokedMethod;
+        this.checkingMethodArgs = checkingMethodArgs;
 
+    }
+
+    public SMTStringPrinter(PropertyChecker checker) {
+        this.checker = checker;
+        this.enclClassName = "";
+        this.enclMethodName = "";
+        this.invokedMethod = "";
+        this.checkingMethodArgs = false;
     }
 
     public String printVarDec(JCTree.JCVariableDecl tree) {
         String smt = "";
         if (tree.init != null) {
-            smt = "(assert (= " + tree.name + " ";// + " " + printExp(tree.init) + "))";
+
+            /////////////////
+            String variable = tree.name.toString();
+            if (!enclMethodName.equals("<init>")) {
+                variable = enclClassName + enclMethodName + "_" + variable;
+            } else {
+                variable = enclClassName + variable;
+            }
+            if(checkingMethodArgs) {
+                variable = enclClassName + invokedMethod + "_" + tree.name.toString();
+            }
+            ////////////////
+
+            //smt = "(assert (= " + tree.name + " ";// + " " + printExp(tree.init) + "))";
+            smt = "(assert (= " + variable + " ";
             if (tree.init.getClass().equals(JCTree.JCBinary.class)) {
                 smt = smt + printBinary((JCTree.JCBinary) tree.init);
                 //visitBinary((JCTree.JCBinary) tree.init, smt);
@@ -26,7 +59,21 @@ public class SMTStringPrinter {
 
     public String printVarAssign(JCTree.JCAssign tree) {
         String smt = "";
-        smt = "(assert (= " + tree.lhs.toString() + " ";
+
+        /////////////////
+        String variable = tree.lhs.toString();
+        if (!enclMethodName.equals("<init>")) {
+            variable = enclClassName + enclMethodName + "_" + variable;
+        } else {
+            variable = enclClassName + variable;
+        }
+        if(checkingMethodArgs) {
+            variable = enclClassName + invokedMethod + "_" + tree.lhs.toString();
+        }
+        ////////////////
+
+        //smt = "(assert (= " + tree.lhs.toString() + " ";
+        smt = "(assert (= " + variable + " ";
         if (tree.rhs.getClass().equals(JCTree.JCBinary.class)) {
             smt = smt + printBinary((JCTree.JCBinary) tree.rhs);
             //visitBinary((JCTree.JCBinary) tree.init, smt);
@@ -39,7 +86,20 @@ public class SMTStringPrinter {
 
     public String printExp(JCTree.JCExpression tree) {
         String smt = "";
-        return smt + tree.toString();
+        if (tree.getKind().toString().equals("INT_LITERAL")) {
+            smt = smt + tree.toString();
+        } else if(tree.getKind().toString().equals("IDENTIFIER")) {
+            String name = enclClassName + enclMethodName + "_" + tree.toString();
+            if (checker.resultsForVar1.containsKey(name)) {
+                smt = smt + name;
+            } else {
+                name = enclClassName + "_" + tree.toString();
+                smt = smt + name;
+            }
+        } else {
+            smt = smt + tree.toString();
+        }
+        return smt;
     }
 
     public String printBinary(JCTree.JCBinary tree) {

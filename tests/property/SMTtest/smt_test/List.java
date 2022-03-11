@@ -39,7 +39,6 @@ public class List {
     @JMLClause("assignable \\nothing")
     public static List cons(Object head, @Nullable List tail) {
         if (tail != null) {
-            // :: error: argument.type.incompatible
             return new List(head, tail);
         } else {
             return new List(head);
@@ -71,9 +70,10 @@ public class List {
     @JMLClause("assignable \\nothing")
     public static @Interval(min = "0", max = "1000") int size(@Nullable List l) {
         if (l == null) {
+
             return 0;
         } else {
-            // :: error: method.invocation.invalid
+        
             return l.size;
         }
     }

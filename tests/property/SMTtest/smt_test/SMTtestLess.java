@@ -12,6 +12,7 @@ public class SMTtestLess {
 	public void testMethod() {
 		SMTtestMethod m = new SMTtestMethod();
 		//int twenty = m.age;
+		// :: error: assignment.type.incompatible
 		@Interval(min = "0", max = "ttt") int ten = m.x;
 	}
 }

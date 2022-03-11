@@ -7,8 +7,6 @@ import edu.kit.iti.checker.property.subchecker.lattice.LatticeAnnotatedTypeFacto
 import org.checkerframework.common.basetype.BaseTypeChecker;
 
 import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,10 +16,16 @@ public class SMTFilePrinter extends PrintWriter {
 
     protected PropertyChecker checker;
     protected String varName;
+    String enclClassName;
+    String enclMethodName;
+    String invokedMethod;
+    boolean checkingMethodArgs;
+    boolean fieldAccess;
+    boolean isNewClass;
 
     Map<String, PropertyAnnotationType> annotationTypes = new HashMap<>();
 
-    public SMTFilePrinter(BufferedWriter outS, PropertyChecker checker, String varName) {
+    public SMTFilePrinter(BufferedWriter outS, PropertyChecker checker, String varName, String enclClassName, String enclMethodName, String invokedMethod, boolean checkingMethodArgs, boolean fieldAccess, boolean isNewClass) {
         super(outS);
         this.checker = checker;
         this.varName = varName;
@@ -29,21 +33,15 @@ public class SMTFilePrinter extends PrintWriter {
             LatticeAnnotatedTypeFactory lf = (LatticeAnnotatedTypeFactory) typeChecker.getTypeFactory();
             this.annotationTypes.putAll(lf.getLattice().getAnnotationTypes());
         }
+        this.enclClassName = enclClassName;
+        this.enclMethodName = enclMethodName;
+        this.invokedMethod = invokedMethod;
+        this.checkingMethodArgs = checkingMethodArgs;
+        this.fieldAccess = fieldAccess;
+        this.isNewClass = isNewClass;
         print("(set-logic QF_UFNIA)");
         println();
 
-    }
-
-    public SMTFilePrinter(File file, PropertyChecker checker, String varName) throws FileNotFoundException {
-        super(file);
-        this.checker = checker;
-        this.varName = varName;
-        for (BaseTypeChecker typeChecker : this.checker.getSubcheckers()) {
-            LatticeAnnotatedTypeFactory lf = (LatticeAnnotatedTypeFactory) typeChecker.getTypeFactory();
-            this.annotationTypes.putAll(lf.getLattice().getAnnotationTypes());
-        }
-        print("(set-logic QF_UFLIA)");
-        println();
     }
 
     public void printLine(String line) {
@@ -51,14 +49,17 @@ public class SMTFilePrinter extends PrintWriter {
             print(line);
             println();
         } else if (line.contains("@")) {
-            printProperty(line);
+            if (!isNewClass) {
+                printProperty(line);
+            } else if (checkingMethodArgs) {
+                printProperty(line);
+            }
         }
     }
 
     public void printProperty(String prop) {
         String ident = getAnnoIdent(prop);
-        //ArrayList<String> pNames = getAnnoParamNames(prop);
-        //getParameterNames(ident);
+
         ArrayList<String> pNames = getParameterNames(ident);
         ArrayList<String> passedParams = new ArrayList<String>();
         getPassedParams(prop, passedParams);
@@ -81,18 +82,11 @@ public class SMTFilePrinter extends PrintWriter {
             smtAnnos.add(smtProp);
         }
 
-        if (!varName.equals(this.varName)) {
+        if (!varName.equals(this.varName.substring(this.varName.indexOf("_") + 1))) {
             for (String sa : smtAnnos) {
                 print("(assert " + sa + ")");
                 println();
             }
-        } else {
-        //    print("(assert (or ");
-        //    for (String sa : smtAnnos) {
-        //        print("(not " + sa + ") ");
-        //    }
-        //    print("))");
-        //    println();
         }
 
     }
@@ -164,8 +158,9 @@ public class SMTFilePrinter extends PrintWriter {
         ArrayList<String> listAnno = new ArrayList<String>();
         String[] s = anno.split(" ");
         for (String s1 : s) {
-//            System.out.println(s1);
-            listAnno.add(s1);
+            if (!s1.equals("") && !s1.equals(" ")) {
+                listAnno.add(s1);
+            }
         }
         return listAnno;
     }
@@ -173,15 +168,19 @@ public class SMTFilePrinter extends PrintWriter {
     private String toSMT(ArrayList<String> parsedAnno) {
         String smt = "";
         if (parsedAnno.size() == 1) {
-            smt = parsedAnno.get(0);
+            if (isNumeric(parsedAnno.get(0))) {
+                smt = parsedAnno.get(0);
+            } else {
+                String name = findVarName(parsedAnno.get(0));
+                //checkDeclarations(name);
+                smt = name;
+            }
         }
         if (parsedAnno.contains("&&")) {
             smt = parseAnd(parsedAnno, "&&");
-//            smt = "(and (" + toSMT(leftSide) + " " + toSMT(rightSide) + ")";
         }
         else if (parsedAnno.contains(">=")) {
             smt = parseAnd(parsedAnno, ">=");
-//            smt = "(>= (" + toSMT(leftSide) + " " + toSMT(rightSide) + ")";
         } else if (parsedAnno.contains("<=")) {
             smt = parseAnd(parsedAnno, "<=");
         } else if (parsedAnno.contains(">")) {
@@ -202,6 +201,16 @@ public class SMTFilePrinter extends PrintWriter {
         return  smt;
     }
 
+    private void checkDeclarations(String name) {
+        if (!checker.usedVarForVar1.get(varName).contains(name)) {
+            print("(declare-const " + name + " Int)");
+        }
+    }
+
+    private static boolean isNumeric(String str){
+        return str != null && str.matches("[0-9.]+");
+    }
+
     private String parseAnd (ArrayList<String> parsedAnno, String op) {
         int index = parsedAnno.indexOf(op);
         ArrayList<String> leftSide = new ArrayList<String>();
@@ -215,16 +224,30 @@ public class SMTFilePrinter extends PrintWriter {
             lSide = toSMT(leftSide);
         } else {
             lSide = parsedAnno.get(0);
+            ///////////////////
+            if (isNumeric(parsedAnno.get(0))) {
+                lSide = parsedAnno.get(0);
+            } else {
+                String name = findVarName(parsedAnno.get(0));
+                lSide = name;
+            }
+            ////////////////////////////////
         }
         if (index + 1 < parsedAnno.size() - 1) {
             for (String s : parsedAnno.subList(index + 1, parsedAnno.size())) {
                 rightSide.add(s);
             }
             rSide = toSMT(rightSide);
-//            System.out.println(rSide);
         } else {
             rSide = parsedAnno.get(parsedAnno.size()-1);
-//            System.out.println(rSide);
+            ///////////////////
+            if (isNumeric(parsedAnno.get(parsedAnno.size()-1))) {
+                rSide = parsedAnno.get(parsedAnno.size()-1);
+            } else {
+                String name = findVarName(parsedAnno.get(parsedAnno.size()-1));
+                rSide = name;
+            }
+            ////////////////////////////////
         }
         if (op.equals("&&")) {
             op = "and";
@@ -245,11 +268,66 @@ public class SMTFilePrinter extends PrintWriter {
         String repCond = replaceCondParameters(pa, name);
         String smtString = "(not " + toSMT(parseStringAnno(repSub)) + ")";
         String smtCond = "(not " + toSMT(parseStringAnno(repCond)) + ")";
-        //print(smtCond);
-        //println();
-        //print(smtString);
         print("(assert (or " + smtString + " " + smtCond + "))");
         println();
+    }
+
+    private String getSubjectField (String in, String name) {
+        String out = "";
+        String[] parsedIn = in.split(" ");
+        for (int i = 0; i < parsedIn.length; i++) {
+            if (parsedIn[i].contains(name)) {
+                out = parsedIn[i];
+            }
+            if (parsedIn[i].contains("§subject§")) {
+                out = parsedIn[i].replace("§subject§", name);
+            }
+        }
+        return out;
+    }
+
+    private String findVarName(String name) {
+        String variable = "notFound";
+        if (name.contains("_")) {
+            variable = name;
+        } else if (fieldAccess) {
+            if (checker.usedVarForVar1.containsKey(this.varName)) {
+                for (String vn : checker.usedVarForVar1.get(this.varName)) {
+                    if (vn.contains(name)) return vn;
+                }
+            }
+        } else
+        if (checker.usedVarForVar1.containsKey(this.varName)) {
+            for (String s : checker.usedVarForVar1.get(this.varName)) {
+                String shortName = s.substring(s.indexOf("_") + 1);
+                if (name.equals(shortName)) {
+                    variable = s;
+                    break;
+                }
+                if (name.equals(s)) {
+                    variable = s;
+                    break;
+                }
+            }
+        }
+        if (isNumeric(name)) variable = name;
+        if (name.equals(this.varName)) variable = this.varName;
+        if (variable.equals("notFound")) {
+            if (checker.objectFields.containsKey(this.varName + "." + name)) {
+                variable = this.varName + "." + name;
+            } else {
+                for (String v : checker.usedVarForVar1.get(varName)) {
+                    if (v.contains(name)) return v;
+                }
+            }
+
+            //System.out.println("%%%%%%%%%%%" + this.invokedMethod + "_" + name);
+            //if (checker.resultsForVar1.containsKey(this.invokedMethod + "_" + name)) {
+                //System.out.println("%%%%%%%%%%%" + this.invokedMethod + "_" + name);
+            //    variable = this.invokedMethod + "_" + name;
+            //}
+        }
+        return variable;
     }
 
     private String replaceCondParameters(PropertyAnnotation pa, String name) {
@@ -258,16 +336,34 @@ public class SMTFilePrinter extends PrintWriter {
         String cond = "?";
         if (!parL.isEmpty()) {
             cond = pa.getAnnotationType().getWFCondition();
-            //    System.out.println(pa.getName() + " " + pa.getAnnotationType().getProperty());
-            //    System.out.println(pa.getAnnotationType().getWFCondition());
             for (int i = 0; i < parL.size(); i++) {
                 String old = "§" + parL.get(i).getName() + "§";
-                String act = acPar.get(i);
+                String act = "";
+                ///////////
+                String[] actual = acPar.get(i).split(" ");
+                for (int j = 0; j < actual.length; j++) {
+                    if (!isNumeric(actual[j]) && !isOperand(actual[j])) {
+                        actual[j] = findVarName(actual[j]);
+                        //System.out.println("§§§§§§§§" + actual[j]);
+                        //checkDeclarations(actual[j]);
+                    }
+                    act = act + " " + actual[j];
+                }
+                ///////////////////
                 cond = cond.replace(old, act);
             }
-            cond = cond.replace("§subject§", name);
+            cond = cond.replace("§subject§", varName);
         }
         return cond;
+    }
+
+    private static boolean isOperand(String str) {
+        if (str.equals("*")) return true;
+        if (str.equals("/")) return true;
+        if (str.equals("+")) return true;
+        if (str.equals("-")) return true;
+        if (str.equals("%")) return true;
+        return false;
     }
 
     private String replacePropertyParameters(PropertyAnnotation pa, String name) {
@@ -278,29 +374,38 @@ public class SMTFilePrinter extends PrintWriter {
             prop = pa.getAnnotationType().getProperty();
             for (int i = 0; i < parL.size(); i++) {
                 String old = "§" + parL.get(i).getName() + "§";
-                String act = acPar.get(i);
+                String act = "";
+                ///////////
+                String[] actual = acPar.get(i).split(" ");
+                for (int j = 0; j < actual.length; j++) {
+                    if (!isNumeric(actual[j]) && !isOperand(actual[j])) {
+                        actual[j] = findVarName(actual[j]);
+                        //System.out.println("§§§§§§§§" + actual[j]);
+                        //checkDeclarations(actual[j]);
+                    }
+                    act = act + " " + actual[j];
+                }
+                ///////////////////
                 prop = prop.replace(old, act);
             }
-            prop = prop.replace("§subject§", name);
+            prop = prop.replace("§subject§", varName);
         }
         return prop;
     }
 
     private ArrayList<String> getParameterNames(String ident) {
         ArrayList<String> pNames = new ArrayList<String>();
-        //System.out.println("!!!!!!!" + annotationTypes);
         if (annotationTypes.containsKey(ident)) {
             String typeDef = annotationTypes.get(ident).toString();
-            //System.out.println("!!!!!!!" + typeDef);
             String params = typeDef.substring(typeDef.indexOf("(") + 1, typeDef.indexOf(")"));
-            //System.out.println("????????" + params);
             String[] splittedParams = params.split(", ");
             for (String s : splittedParams) {
                 String[] typeAndName = s.split(" ");
-                pNames.add(typeAndName[1]);
+                if (typeAndName.length > 1) {
+                    pNames.add(typeAndName[1]);
+                }
             }
         }
-        //System.out.println("=======" + pNames);
         return pNames;
     }
 

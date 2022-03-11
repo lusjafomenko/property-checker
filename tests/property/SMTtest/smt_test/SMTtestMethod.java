@@ -25,11 +25,15 @@ public class SMTtestMethod {
 	final @Interval(min = "0", max = "100") int area = 20;
 	final @Interval(min = "0", max = "maxAge") int age;
 	
-	public SMTtestMethod() {
+	public SMTtestMethod() 
+	{
+	// :: error: assignment.type.incompatible
 		this.age = 20;
 	}
 	
-	public SMTtestMethod(@Interval(min = "0", max = "150") int age1) {
+	public SMTtestMethod
+	(@Interval(min = "0", max = "150") int age1) {
+	// :: error: assignment.type.incompatible
 		this.age = age1;
 	}
 	
@@ -101,6 +105,7 @@ public class SMTtestMethod {
 		int eight = 8;
 		int r = 10;
 		@Interval(min = "0", max = "z") int t6 = dummy3(eight, eight);
+		// :: error: argument.type.incompatible
 		@Interval(min = "0", max = "area + 1") int t2 = dummy3(31, eight);
 		//final int x = 1;
 		@Interval(min = "0", max = "z") int t3 = t6;

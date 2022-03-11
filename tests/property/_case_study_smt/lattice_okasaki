@@ -1,0 +1,43 @@
+# This file is part of the Property Checker.
+# Copyright (c) 2021 -- present. Property Checker developers.
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 only, as
+# published by the Free Software Foundation.
+#
+# This code is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# version 2 for more details.
+#
+# You should have received a copy of the GNU General Public License version
+# 2 along with this work; if not, write to the Free Software Foundation,
+# Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ident okasaki;
+
+annotation TopOkasaki() any :<==> "true" for "true";
+annotation BottomOkasaki() any :<==> "false" for "true";
+
+annotation Okasaki() case_study_smt.Queue
+    :<==> "§subject§ != null && (§subject§.back == null || (§subject§.front != null && §subject§.front.size >= §subject§.back.size))"
+    for "true";
+
+annotation FrontNonEmpty() case_study_smt.Queue
+    :<==> "§subject§ != null && §subject§.front != null"
+    for "true";
+
+annotation OkasakiNonEmpty() case_study_smt.Queue
+    :<==> "§subject§ != null && §subject§.front != null && (§subject§.back == null || (§subject§.front != null && §subject§.front.size >= §subject§.back.size))"
+    for "true";
+
+relation FrontNonEmpty() <: TopOkasaki() :<==> "true";
+relation Okasaki() <: TopOkasaki() :<==> "true";
+
+relation OkasakiNonEmpty() <: TopOkasaki() :<==> "true";
+relation OkasakiNonEmpty() <: Okasaki() :<==> "true";
+relation OkasakiNonEmpty() <: FrontNonEmpty() :<==> "true";
+
+relation BottomOkasaki() <: TopOkasaki() :<==> "true";
+relation BottomOkasaki() <: Okasaki() :<==> "true";
+relation BottomOkasaki() <: OkasakiNonEmpty() :<==> "true";
+relation BottomOkasaki() <: FrontNonEmpty() :<==> "true";
