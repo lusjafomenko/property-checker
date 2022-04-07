@@ -26,7 +26,7 @@ public class AProduct {
     public final @Interval(min="0", max="18") int ageRestriction;
     public final int maxAmount = 10;
     public final int maxSimpleGift = 10;
-    public final int bulk = 10;
+    public final int bunch = 10;
 
     @JMLClause("ensures this.title == title && this.price == price && this.ageRestriction == ageRestriction")
     @JMLClause("assignable \\nothing")
@@ -40,8 +40,8 @@ public class AProduct {
         this.ageRestriction = ageRestriction;
     }
     
-    public @Interval(min = "0", max = "bulk * price") int calculateBulkPrice() {
-    	int total = bulk * price;
+    public @Interval(min = "0", max = "bunch * price") int calculateBunchPrice() {
+    	int total = bunch * price;
     	return total;
     }
     

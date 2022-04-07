@@ -22,13 +22,13 @@ import edu.kit.iti.checker.property.checker.qual.*;
 public class Order {
     
     public final int witness;
-    public final @AgedOver(age="witness") Customer customer;
+    public final @AgedOver(age="witness") ACustomer customer;
     public final @AllowedFor(age="witness") AProduct product;
 
     @JMLClause("ensures this.customer == customer && this.product == product && this.witness == witness")
     @JMLClause("assignable \\nothing")
     // :: error: inconsistent.constructor.type
-    public Order(int witness, @AgedOver(age="witness") Customer customer, @AllowedFor(age="witness") AProduct product) {
+    public Order(int witness, @AgedOver(age="witness") ACustomer customer, @AllowedFor(age="witness") AProduct product) {
         this.witness = witness;
         // :: error: assignment.type.incompatible
         this.customer = customer;
@@ -38,14 +38,14 @@ public class Order {
 
     @JMLClause("ensures \result.customer == customer && \result.product == product && \result.witness == 18")
     @JMLClause("assignable \\nothing")
-    public static Order order18(@AgedOver(age="18") Customer customer, @AllowedFor(age="18") AProduct product) {
+    public static Order order18(@AgedOver(age="18") ACustomer customer, @AllowedFor(age="18") AProduct product) {
         // :: error: argument.type.incompatible
         return new Order(18, customer, product);
     }
 
     @JMLClause("ensures \result.customer == customer && \result.product == product && \result.witness == 14")
     @JMLClause("assignable \\nothing")
-    public static Order order14(@AgedOver(age="14") Customer customer, @AllowedFor(age="14") AProduct product) {
+    public static Order order14(@AgedOver(age="14") ACustomer customer, @AllowedFor(age="14") AProduct product) {
         // :: error: argument.type.incompatible
         return new Order(14, customer, product);
     }

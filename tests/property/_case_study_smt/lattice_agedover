@@ -18,7 +18,7 @@ ident agedover;
 annotation AgedAny() any :<==> "true" for "true";
 annotation AgedBottom() any :<==> "false" for "true";
 
-annotation AgedOver(int age) case_study_smt.Customer
+annotation AgedOver(int age) case_study_smt.ACustomer
     :<==> "§subject§ != null && §subject§.age >= §age§"
     for "§age§ >= 0";
 

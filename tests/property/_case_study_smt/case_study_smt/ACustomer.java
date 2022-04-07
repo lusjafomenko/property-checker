@@ -19,7 +19,7 @@ package case_study_smt;
 import edu.kit.iti.checker.property.subchecker.lattice.case_study_smt_qual.*;
 import edu.kit.iti.checker.property.checker.qual.*;
 
-public class Customer {
+public class ACustomer {
     
     public final String name;
     public final @Interval(min="14", max="150") int age;
@@ -27,7 +27,7 @@ public class Customer {
     @JMLClause("ensures this.name == name && this.age == age")
     @JMLClause("assignable \\nothing")
     // :: error: inconsistent.constructor.type
-    public @AgedOver(age="age") Customer(String name, @Interval(min="14", max="150") int age) {
+    public @AgedOver(age="age") ACustomer(String name, @Interval(min="14", max="150") int age) {
         this.name = name;
         this.age = age;
     }

@@ -21,32 +21,31 @@ import edu.kit.iti.checker.property.checker.qual.*;
 
 public class Main {
 
-	public static final int eighteen = 18;
-	public static final int six = 6;
-	public static final int fifteen = 15;
+	public final int eighteen = 18;
+	public final int six = 6;
+	public final int fifteen = 15;
     // :: error: inconsistent.constructor.type
     private Main() { }
     
-    public static void main(String[] args) {
+    public void main() {
     
         @AllowedFor(age="eighteen") AProduct product18 = new AProduct("Louisiana Buzzsaw Carnage", 10, eighteen);
         @AllowedFor(age="six") AProduct product6 = new AProduct("Tim & Jeffrey, All Episodes", 10, 6);
-        @Interval(min = "0", max = "product6.price") int price6 = product6.price;
+        final @Interval(min = "0", max = "product6.price") int price6 = product6.price;
         
-        ///////// !!!
-        @Interval(min = "0", max = "price6 * 10") int totalPrice6 = product6.calculateBulkPrice(); 
+        final @Interval(min = "0", max = "price6 * 10") int totalPrice6 = product6.calculateBunchPrice(); 
         
-        @AgedOver(age="18") Customer customer18 = new Customer("Alice", eighteen);
-        @AgedOver(age="14") Customer customer14 = new Customer("Bob", 14);
-        @AgedOver(age="fifteen") Customer customer15 = new Customer("Lisa", fifteen);
+        @AgedOver(age="18") ACustomer customer18 = new ACustomer("Alice", eighteen);
+        @AgedOver(age="14") ACustomer customer14 = new ACustomer("Bob", 14);
+        @AgedOver(age="fifteen") ACustomer customer15 = new ACustomer("Lisa", fifteen);
         
         addOrder14(customer14, product6);
         addOrder14(customer15, product6);
-        @Interval(min = "1", max = "fifteen + 1") int ordersAmount14 = singleCustomerOrderAmount(0);
+        final @Interval(min = "1", max = "fifteen + 1") int ordersAmount14 = singleCustomerOrderAmount(0);
         
         addOrder18(customer18, product18);
         addOrder14(customer18, product6);
-        @Interval(min = "1", max = "fifteen + 1") int ordersAmount18 = singleCustomerOrderAmount(1);
+        final @Interval(min = "1", max = "fifteen + 1") int ordersAmount18 = singleCustomerOrderAmount(1);
         
         Shop.getInstance().processNextOrder();
         Shop.getInstance().processNextOrder();
@@ -55,16 +54,16 @@ public class Main {
     }
     
     @JMLClauseTranslationOnly("assignable Shop.instance.orders")
-    public static void addOrder18(@AgedOver(age="18") Customer customer, @AllowedFor(age="18") AProduct product) {
+    public void addOrder18(@AgedOver(age="18") ACustomer customer, @AllowedFor(age="18") AProduct product) {
         Shop.getInstance().addOrder(Order.order18(customer, product));
     }
 
     @JMLClauseTranslationOnly("assignable Shop.instance.orders")
-    public static void addOrder14(@AgedOver(age="14") Customer customer, @AllowedFor(age="14") AProduct product) {
+    public void addOrder14(@AgedOver(age="14") ACustomer customer, @AllowedFor(age="14") AProduct product) {
         Shop.getInstance().addOrder(Order.order14(customer, product));
     }
     
-    public static @Interval(min = "1", max = "previousAmount + 1") int singleCustomerOrderAmount(@Interval(min = "0", max = "fifteen") int previousAmount) {
+    public @Interval(min = "1", max = "previousAmount + 1") int singleCustomerOrderAmount(@Interval(min = "0", max = "fifteen") int previousAmount) {
     	int actualAmount = previousAmount + 1;
     	return actualAmount;
     }
